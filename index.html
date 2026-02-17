@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bike Route Planner - Road Cycling</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <h1>🚴 Bike Route Planner</h1>
+            <div class="header-controls">
+                <button id="currentLocationBtn" class="location-btn">📍 Current Location</button>
+            </div>
+        </header>
+        
+        <main class="main-content">
+            <div class="sidebar">
+                <div class="route-controls">
+                    <h2>Plan Your Route</h2>
+                    
+                    <div class="input-group">
+                        <label>Start Point</label>
+                        <input type="text" id="startInput" placeholder="Click on map or use Current Location" readonly />
+                    </div>
+                    
+                    <div class="waypoints-section">
+                        <div class="waypoints-header">
+                            <label>Waypoints</label>
+                            <span id="waypointCounter" class="waypoint-counter">Waypoints: 0</span>
+                        </div>
+                        <div id="waypointsList" class="waypoints-list"></div>
+                        <button id="addWaypointBtn" class="add-waypoint-btn">+ Add Waypoint</button>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label>End Point</label>
+                        <input type="text" id="endInput" placeholder="Click on map to set destination" readonly />
+                    </div>
+                    
+                    <div class="action-buttons">
+                        <button id="generateRouteBtn" class="generate-btn">🚴 Generate Route</button>
+                        <button id="clearRouteBtn" class="clear-btn">🗑️ Clear Route</button>
+                    </div>
+                </div>
+                
+                <div class="route-info" id="routeInfo" style="display: none;">
+                    <!-- Route information will be displayed here -->
+                </div>
+                
+                <div class="turn-directions" id="turnDirections" style="display: none;">
+                    <!-- Turn-by-turn directions will be displayed here -->
+                </div>
+            </div>
+            
+            <div class="map-container">
+                <div id="map"></div>
+            </div>
+        </main>
+    </div>
+    
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
