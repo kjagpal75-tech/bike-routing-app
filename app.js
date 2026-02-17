@@ -31,11 +31,16 @@ class BikeRoutePlanner {
         const useImperial = document.getElementById('useImperialUnits');
         const isImperial = useImperial ? useImperial.checked : false;
         
+        console.log('🔄 convertDistance called with:', meters, 'meters');
+        
         if (isImperial) {
             const miles = meters * 0.621371;
+            console.log('🔄 Converting to miles:', miles);
             return miles.toFixed(2) + ' miles';
         } else {
-            return (meters / 1000).toFixed(2) + ' km';
+            const km = meters / 1000;
+            console.log('🔄 Converting to km:', km);
+            return km.toFixed(2) + ' km';
         }
     }
     
@@ -1235,6 +1240,8 @@ class BikeRoutePlanner {
         const routeInfoDiv = document.getElementById('routeInfo');
         if (!routeInfoDiv) return;
         
+        console.log('🔄 displayRouteInfo called with routeData.distance:', routeData.distance);
+        
         routeInfoDiv.style.display = 'block';
         
         const distance = this.convertDistance(routeData.distance);
@@ -1243,6 +1250,9 @@ class BikeRoutePlanner {
         // Calculate speed in km/h first, then convert
         const speedKmh = routeData.distance / 1000 / (routeData.duration / 60);
         const speed = this.convertSpeed(speedKmh);
+        
+        console.log('🔄 Calculated speedKmh:', speedKmh);
+        console.log('🔄 Converted speed:', speed);
         
         routeInfoDiv.innerHTML = `
             <div class="route-stats">
