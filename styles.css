@@ -211,6 +211,28 @@ body {
     border-radius: 4px;
     font-size: 0.8rem;
     background: white;
+    transition: border-color 0.3s ease;
+}
+
+.waypoint-input:focus {
+    outline: none;
+    border-color: #FF9800;
+}
+
+/* Waypoint Suggestions */
+.waypoint-suggestions {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-top: none;
+    border-radius: 0 0 6px 6px;
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 1000;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
 }
 
 .add-waypoint-btn {

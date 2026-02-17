@@ -371,10 +371,147 @@ class BikeRoutePlanner {
                 <span class="waypoint-number">Waypoint ${this.waypoints.length}</span>
                 <button class="remove-waypoint-btn" onclick="app.removeWaypoint(${waypointId})">✕</button>
             </div>
-            <input type="text" class="waypoint-input" placeholder="Waypoint location" value="${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}" readonly />
+            <input type="text" class="waypoint-input" placeholder="Enter California address or POI" value="${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}" />
         `;
         
         waypointsList.appendChild(waypointDiv);
+        
+        // Add address search functionality to this waypoint input
+        const waypointInput = waypointDiv.querySelector('.waypoint-input');
+        this.setupWaypointAddressSearch(waypointInput, waypointId);
+    }
+    
+    setupWaypointAddressSearch(input, waypointId) {
+        // Add search functionality
+        let searchTimeout;
+        input.addEventListener('input', (e) => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                this.searchWaypointAddress(e.target.value, waypointId);
+            }, 500);
+        });
+        
+        // Add enter key support
+        input.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                this.resolveWaypointAddress(e.target.value, waypointId);
+            }
+        });
+        
+        // Add blur event to hide suggestions when clicking away
+        input.addEventListener('blur', () => {
+            setTimeout(() => this.hideWaypointSuggestions(waypointId), 200);
+        });
+    }
+    
+    async searchWaypointAddress(query, waypointId) {
+        if (query.length < 3) {
+            this.hideWaypointSuggestions(waypointId);
+            return;
+        }
+        
+        try {
+            // Use Nominatim API for address search, focused on California
+            const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query + ', California')}&limit=5&addressdetails=1`);
+            const results = await response.json();
+            
+            this.displayWaypointSuggestions(results, waypointId);
+        } catch (error) {
+            console.error('Waypoint address search error:', error);
+        }
+    }
+    
+    displayWaypointSuggestions(results, waypointId) {
+        // Remove existing suggestions
+        this.hideWaypointSuggestions(waypointId);
+        
+        if (results.length === 0) return;
+        
+        // Create suggestions dropdown
+        const suggestionsDiv = document.createElement('div');
+        suggestionsDiv.className = 'address-suggestions waypoint-suggestions';
+        suggestionsDiv.id = `waypointSuggestions${waypointId}`;
+        
+        results.forEach(result => {
+            const suggestionDiv = document.createElement('div');
+            suggestionDiv.className = 'suggestion-item';
+            
+            // Format display name
+            let displayName = result.display_name;
+            if (displayName.length > 60) {
+                displayName = displayName.substring(0, 60) + '...';
+            }
+            
+            suggestionDiv.textContent = displayName;
+            suggestionDiv.addEventListener('click', () => {
+                this.selectWaypointSuggestion(result, waypointId);
+            });
+            
+            suggestionsDiv.appendChild(suggestionDiv);
+        });
+        
+        // Find the waypoint input and position suggestions below it
+        const waypointInput = document.querySelector(`.waypoint-item input`);
+        if (waypointInput && waypointInput.closest('.waypoint-item').querySelector(`input[placeholder*="California"]`)) {
+            const waypointItem = waypointInput.closest('.waypoint-item');
+            waypointItem.style.position = 'relative';
+            suggestionsDiv.style.top = waypointInput.offsetHeight + 'px';
+            suggestionsDiv.style.left = '0';
+            suggestionsDiv.style.right = '0';
+            waypointItem.appendChild(suggestionsDiv);
+        }
+    }
+    
+    hideWaypointSuggestions(waypointId) {
+        const existingSuggestions = document.getElementById(`waypointSuggestions${waypointId}`);
+        if (existingSuggestions) {
+            existingSuggestions.remove();
+        }
+    }
+    
+    selectWaypointSuggestion(result, waypointId) {
+        const latlng = L.latLng(parseFloat(result.lat), parseFloat(result.lon));
+        
+        // Update waypoint marker position
+        const waypoint = this.waypoints.find(w => w.id === waypointId);
+        if (waypoint) {
+            waypoint.latlng = latlng;
+            waypoint.marker.setLatLng(latlng);
+        }
+        
+        // Update input with selected address
+        const waypointInput = document.querySelector(`.waypoint-item input[placeholder*="California"]`);
+        if (waypointInput) {
+            waypointInput.value = result.display_name;
+        }
+        
+        // Hide suggestions
+        this.hideWaypointSuggestions(waypointId);
+        
+        // Center map on the location
+        this.map.setView(latlng, 15);
+        
+        // Show notification
+        this.showNotification(`Waypoint set to: ${result.display_name}`, 'success');
+    }
+    
+    async resolveWaypointAddress(address, waypointId) {
+        if (!address.trim()) return;
+        
+        try {
+            const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address + ', California')}&limit=1`);
+            const results = await response.json();
+            
+            if (results.length > 0) {
+                this.selectWaypointSuggestion(results[0], waypointId);
+            } else {
+                this.showNotification('Address not found in California', 'error');
+            }
+        } catch (error) {
+            console.error('Waypoint address resolution error:', error);
+            this.showNotification('Failed to resolve address', 'error');
+        }
     }
     
     removeWaypoint(waypointId) {
