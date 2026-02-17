@@ -675,11 +675,16 @@ class BikeRoutePlanner {
     
     setEndPointForReturnToStart(latlng) {
         // Special method to set end point even when Return to Start is enabled
+        console.log('🔄 setEndPointForReturnToStart called with:', latlng);
+        
         if (this.endMarker) {
+            console.log('🔄 Removing existing end marker');
             this.map.removeLayer(this.endMarker);
         }
         
+        console.log('🔄 Creating new end marker');
         this.endMarker = L.marker(latlng, { icon: this.endIcon, draggable: true }).addTo(this.map);
+        console.log('🔄 End marker created:', this.endMarker);
         
         // Update end input with start location info
         const startInput = document.getElementById('startInput');
@@ -687,6 +692,7 @@ class BikeRoutePlanner {
             const endInput = document.getElementById('endInput');
             if (endInput) {
                 endInput.value = startInput.value;
+                console.log('🔄 End input updated with:', startInput.value);
             }
         }
         
@@ -1092,13 +1098,18 @@ class BikeRoutePlanner {
         
         // If return to start is enabled but end point isn't set, set it to start point
         if (returnToStart && !this.endMarker) {
+            console.log('🔄 Setting end point for return to start...');
             const startLatLng = this.startMarker.getLatLng();
+            console.log('🔄 Start LatLng:', startLatLng);
             this.setEndPointForReturnToStart(startLatLng);
+            console.log('🔄 End marker after setting:', this.endMarker);
         }
         
         // Double-check we have both markers before proceeding
         if (!this.startMarker || !this.endMarker) {
             console.error('❌ Missing markers for route generation');
+            console.error('❌ Start marker:', this.startMarker);
+            console.error('❌ End marker:', this.endMarker);
             alert('Unable to generate route - missing start or end point');
             return;
         }
