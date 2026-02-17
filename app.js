@@ -23,20 +23,20 @@ class BikeRoutePlanner {
         
         // Create custom icons
         this.startIcon = L.divIcon({ 
-            html: '<div style="background: #4CAF50; color: white; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-weight: bold;">S</div>',
-            iconSize: [30, 30],
+            html: '<div style="background: #4CAF50; color: white; border-radius: 50%; width: 35px; height: 35px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px; box-shadow: 0 2px 6px rgba(0,0,0,0.3); border: 2px solid white;">S</div>',
+            iconSize: [35, 35],
             className: 'custom-div-icon'
         });
         
         this.endIcon = L.divIcon({ 
-            html: '<div style="background: #F44336; color: white; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-weight: bold;">E</div>',
-            iconSize: [30, 30],
+            html: '<div style="background: #F44336; color: white; border-radius: 50%; width: 35px; height: 35px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px; box-shadow: 0 2px 6px rgba(0,0,0,0.3); border: 2px solid white;">E</div>',
+            iconSize: [35, 35],
             className: 'custom-div-icon'
         });
         
         this.waypointIcon = L.divIcon({ 
-            html: '<div style="background: #FF9800; color: white; border-radius: 50%; width: 25px; height: 25px; display: flex; align-items: center; justify-content: center; font-weight: bold;">W</div>',
-            iconSize: [25, 25],
+            html: '<div style="background: #FF9800; color: white; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; box-shadow: 0 2px 6px rgba(0,0,0,0.3); border: 2px solid white;">W</div>',
+            iconSize: [30, 30],
             className: 'custom-div-icon'
         });
         
@@ -1087,24 +1087,6 @@ class BikeRoutePlanner {
                 
                 const maxElevation = Math.max(...elevations);
                 const minElevation = Math.min(...elevations);
-                const elevationRange = maxElevation - minElevation;
-                
-                elevations.forEach((elevation, index) => {
-                    const x = (index / (elevations.length - 1)) * width;
-                    const y = height - ((elevation - minElevation) / elevationRange) * height;
-                    
-                    if (index === 0) {
-                        ctx.moveTo(x, y);
-                    } else {
-                        ctx.lineTo(x, y);
-                    }
-                });
-                
-                ctx.stroke();
-                
-                // Fill area under the line
-                ctx.fillStyle = 'rgba(255, 107, 53, 0.1)';
-                ctx.lineTo(width, height);
                 ctx.lineTo(0, height);
                 ctx.closePath();
                 ctx.fill();
