@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Imperial Units Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test-result { margin: 10px 0; padding: 10px; border: 1px solid #ccc; }
+    .success { color: green; }
+        .error { color: red; }
+    </style>
+</head>
+<body>
+    <h1>Imperial Units Test</h1>
+    
+    <h2>Testing Unit Conversion Functions</h2>
+    
+    <div id="test-results"></div>
+    
+    <h2>Manual Test</h2>
+    <button onclick="testConversions()">Test Unit Conversions</button>
+    
+    <script>
+        // Mock the DOM elements for testing
+        document.getElementById = function(id) {
+            return {
+                checked: false,
+                addEventListener: function() {}
+            };
+        };
+        
+        // Unit conversion functions (copied from app.js)
+        function convertDistance(meters) {
+            const useImperial = document.getElementById('useImperialUnits');
+            const isImperial = useImperial ? useImperial.checked : false;
+            
+            if (isImperial) {
+                const miles = meters * 0.621371;
+                return miles.toFixed(2) + ' miles';
+            } else {
+                return (meters / 1000).toFixed(2) + ' km';
+            }
+        }
+        
+        function convertElevation(meters) {
+            const useImperial = document.getElementById('useImperialUnits');
+            const isImperial = useImperial ? useImperial.checked : false;
+            
+            if (isImperial) {
+                const feet = meters * 3.28084;
+                return feet.toFixed(0) + ' feet';
+            } else {
+                return meters.toFixed(0) + ' m';
+            }
+        }
+        
+        function convertSpeed(kmh) {
+            const useImperial = document.getElementById('useImperialUnits');
+            const isImperial = useImperial ? useImperial.checked : false;
+            
+            if (isImperial) {
+                const mph = kmh * 0.621371;
+                return mph.toFixed(1) + ' mph';
+            } else {
+                return kmh.toFixed(1) + ' km/h';
+            }
+        }
+        
+        function testConversions() {
+            const results = document.getElementById('test-results');
+            results.innerHTML = '';
+            
+            let tests = [];
+            
+            // Test distance conversion
+            tests.push('Distance (1000m): ' + convertDistance(1000));
+            tests.push('Distance (5000m): ' + convertDistance(5000));
+            
+            // Test elevation conversion
+            tests.push('Elevation (100m): ' + convertElevation(100));
+            tests.push('Elevation (500m): ' + convertElevation(500));
+            
+            // Test speed conversion
+            tests.push('Speed (50 km/h): ' + convertSpeed(50));
+            tests.push('Speed (100 km/h): ' + convertSpeed(100));
+            
+            // Test with imperial units
+            document.getElementById('useImperialUnits').checked = true;
+            
+            tests.push('');
+            tests.push('With Imperial Units:');
+            tests.push('Distance (1000m): ' + convertDistance(1000));
+            tests.push('Distance (5000m): ' + convertDistance(5000));
+            tests.push('Elevation (100m): ' + convertElevation(100));
+            tests.push('Elevation (500m): ' + convertElevation(500));
+            tests.push('Speed (50 km/h): ' + convertSpeed(50));
+            tests.push('Speed (100 km/h): ' + convertSpeed(100));
+            
+            results.innerHTML = tests.map(test => 
+                '<div class="test-result">' + test + '</div>'
+            ).join('');
+        }
+    </script>
+</body>
+</html>

@@ -8,6 +8,7 @@ class BikeRoutePlanner {
         this.routeLayer = null;
         
         this.initMap();
+        this.createIcons();
         this.setupEventListeners();
         this.setupAddressSearch();
     }
@@ -21,7 +22,12 @@ class BikeRoutePlanner {
             attribution: '© OpenStreetMap contributors'
         }).addTo(this.map);
         
-        convertDistance(meters) {
+        // Add click handler to map
+        this.map.on('click', (e) => this.handleMapClick(e));
+    }
+    
+    // Unit conversion functions
+    convertDistance(meters) {
         const useImperial = document.getElementById('useImperialUnits');
         const isImperial = useImperial ? useImperial.checked : false;
         
@@ -33,7 +39,32 @@ class BikeRoutePlanner {
         }
     }
     
+    convertElevation(meters) {
+        const useImperial = document.getElementById('useImperialUnits');
+        const isImperial = useImperial ? useImperial.checked : false;
+        
+        if (isImperial) {
+            const feet = meters * 3.28084;
+            return feet.toFixed(0) + ' feet';
+        } else {
+            return meters.toFixed(0) + ' m';
+        }
+    }
+    
+    convertSpeed(kmh) {
+        const useImperial = document.getElementById('useImperialUnits');
+        const isImperial = useImperial ? useImperial.checked : false;
+        
+        if (isImperial) {
+            const mph = kmh * 0.621371;
+            return mph.toFixed(1) + ' mph';
+        } else {
+            return kmh.toFixed(1) + ' km/h';
+        }
+    }
+    
     // Create custom icons
+    createIcons() {
         this.startIcon = L.divIcon({ 
             html: '<div style="background: #4CAF50; color: white; border-radius: 50%; width: 35px; height: 35px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px; box-shadow: 0 2px 6px rgba(0,0,0,0.3); border: 2px solid white;">S</div>',
             iconSize: [35, 35],
