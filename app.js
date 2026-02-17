@@ -568,36 +568,48 @@ class BikeRoutePlanner {
         
         try {
             // Clear existing route
+            console.log('🗑️ Clearing existing route...');
             this.clearRoute();
             
             // Set start point: 38695, Dow Court, Niles Junction, Niles District, Fremont, Alameda County, California, 94536, United States
+            console.log('📍 Setting start point...');
             const startAddress = "38695, Dow Court, Niles Junction, Niles District, Fremont, Alameda County, California, 94536, United States";
             await this.resolveAddress(startAddress, 'start');
+            console.log('✅ Start point set');
             
             // Set waypoint: Vargas Regional Park
+            console.log('📍 Setting waypoint...');
             const waypointAddress = "Vargas Regional Park, Fremont, California";
             await this.addWaypointByAddress(waypointAddress);
+            console.log('✅ Waypoint set');
             
             // Set end point: 38695, Dow Court, Niles Junction, Niles District, Fremont, Alameda County, California, 94536, United States
+            console.log('📍 Setting end point...');
             const endAddress = "38695, Dow Court, Niles Junction, Niles District, Fremont, Alameda County, California, 94536, United States";
             await this.resolveAddress(endAddress, 'end');
+            console.log('✅ End point set');
             
             // Show notification
             this.showNotification('Test route setup complete! Click "Generate Route" to see the route.', 'success');
+            console.log('🎉 Test route setup complete!');
             
         } catch (error) {
-            console.error('Test route setup error:', error);
+            console.error('❌ Test route setup error:', error);
             this.showNotification('Failed to setup test route', 'error');
         }
     }
     
     async addWaypointByAddress(address) {
+        console.log(`📍 Adding waypoint by address: ${address}`);
         try {
             const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address + ', California')}&limit=1`);
             const results = await response.json();
             
+            console.log(`🔍 Search results for "${address}":`, results);
+            
             if (results.length > 0) {
                 const result = results[0];
+                console.log(`✅ Found location: ${result.display_name}`);
                 const latlng = L.latLng(parseFloat(result.lat), parseFloat(result.lon));
                 
                 // Add waypoint at the resolved location
@@ -620,12 +632,14 @@ class BikeRoutePlanner {
                 
                 // Show notification
                 this.showNotification(`Waypoint set to: ${result.display_name}`, 'success');
+                console.log(`✅ Waypoint successfully added at: ${latlng.lat}, ${latlng.lng}`);
                 
             } else {
+                console.log(`❌ No results found for: ${address}`);
                 this.showNotification('Address not found in California', 'error');
             }
         } catch (error) {
-            console.error('Waypoint address resolution error:', error);
+            console.error('❌ Waypoint address resolution error:', error);
             this.showNotification('Failed to resolve address', 'error');
         }
     }
