@@ -571,23 +571,48 @@ class BikeRoutePlanner {
             console.log('🗑️ Clearing existing route...');
             this.clearRoute();
             
-            // Set start point: 38695, Dow Court, Niles Junction, Niles District, Fremont, Alameda County, California, 94536, United States
-            console.log('📍 Setting start point...');
-            const startAddress = "38695, Dow Court, Niles Junction, Niles District, Fremont, Alameda County, California, 94536, United States";
-            await this.resolveAddress(startAddress, 'start');
-            console.log('✅ Start point set');
+            // Test different address formats for Dow Court, Fremont
+            console.log('📍 Testing address resolution...');
+            
+            // Try the specific address first
+            const startAddress = "38695, Dow Court, Fremont, CA";
+            console.log(`🔍 Trying to resolve: ${startAddress}`);
+            
+            let startResult = await this.tryResolveAddress(startAddress);
+            if (!startResult) {
+                // Fallback to Dow Court, Fremont
+                console.log('� Trying fallback: Dow Court, Fremont, CA');
+                startResult = await this.tryResolveAddress("Dow Court, Fremont, CA");
+            }
+            
+            if (!startResult) {
+                // Fallback to Fremont, CA
+                console.log('🔄 Trying fallback: Fremont, CA');
+                startResult = await this.tryResolveAddress("Fremont, CA");
+            }
+            
+            if (startResult) {
+                const startLatlng = L.latLng(parseFloat(startResult.lat), parseFloat(startResult.lon));
+                this.setStartPoint(startLatlng);
+                console.log(`✅ Start point set to: ${startResult.display_name}`);
+            } else {
+                console.log('❌ Could not resolve start address');
+                this.showNotification('Could not resolve start address', 'error');
+                return;
+            }
             
             // Set waypoint: Vargas Regional Park
             console.log('📍 Setting waypoint...');
             const waypointAddress = "Vargas Regional Park, Fremont, California";
             await this.addWaypointByAddress(waypointAddress);
-            console.log('✅ Waypoint set');
             
-            // Set end point: 38695, Dow Court, Niles Junction, Niles District, Fremont, Alameda County, California, 94536, United States
+            // Set end point (same as start)
             console.log('📍 Setting end point...');
-            const endAddress = "38695, Dow Court, Niles Junction, Niles District, Fremont, Alameda County, California, 94536, United States";
-            await this.resolveAddress(endAddress, 'end');
-            console.log('✅ End point set');
+            if (startResult) {
+                const endLatlng = L.latLng(parseFloat(startResult.lat), parseFloat(startResult.lon));
+                this.setEndPoint(endLatlng);
+                console.log(`✅ End point set to: ${startResult.display_name}`);
+            }
             
             // Show notification
             this.showNotification('Test route setup complete! Click "Generate Route" to see the route.', 'success');
@@ -596,6 +621,27 @@ class BikeRoutePlanner {
         } catch (error) {
             console.error('❌ Test route setup error:', error);
             this.showNotification('Failed to setup test route', 'error');
+        }
+    }
+    
+    async tryResolveAddress(address) {
+        try {
+            console.log(`🔍 Searching for: ${address}`);
+            const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`);
+            const results = await response.json();
+            
+            console.log(`🔍 Results for "${address}":`, results);
+            
+            if (results.length > 0) {
+                console.log(`✅ Found: ${results[0].display_name}`);
+                return results[0];
+            } else {
+                console.log(`❌ No results found for: ${address}`);
+                return null;
+            }
+        } catch (error) {
+            console.error(`❌ Error resolving "${address}":`, error);
+            return null;
         }
     }
     
