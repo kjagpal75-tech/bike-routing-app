@@ -7,69 +7,9 @@ class BikeRoutePlanner {
         this.waypoints = [];
         this.routeLayer = null;
         
-        // California POI data
-        this.californiaPOI = [
-            // Major Cities
-            { name: "San Francisco", lat: 37.7749, lng: -122.4194, type: "city" },
-            { name: "Los Angeles", lat: 34.0522, lng: -118.2437, type: "city" },
-            { name: "San Diego", lat: 32.7157, lng: -117.1611, type: "city" },
-            { name: "Sacramento", lat: 38.5816, lng: -121.4944, type: "city" },
-            { name: "San Jose", lat: 37.3382, lng: -121.8863, type: "city" },
-            { name: "Oakland", lat: 37.8044, lng: -122.2711, type: "city" },
-            { name: "Fresno", lat: 36.7378, lng: -119.7871, type: "city" },
-            { name: "Long Beach", lat: 33.7701, lng: -118.1934, type: "city" },
-            
-            // Popular Cycling Routes
-            { name: "Golden Gate Bridge", lat: 37.8199, lng: -122.4783, type: "landmark" },
-            { name: "Golden Gate Park", lat: 37.7694, lng: -122.4862, type: "park" },
-            { name: "Pacific Coast Highway", lat: 36.2704, lng: -121.8081, type: "route" },
-            { name: "Napa Valley", lat: 38.5025, lng: -122.2654, type: "region" },
-            { name: "Big Sur", lat: 36.2704, lng: -121.8081, type: "region" },
-            { name: "Lake Tahoe", lat: 39.0968, lng: -120.0324, type: "landmark" },
-            { name: "Yosemite Valley", lat: 37.7456, lng: -119.5936, type: "park" },
-            { name: "Death Valley", lat: 36.5323, lng: -116.9325, type: "park" },
-            
-            // Cycling POI
-            { name: "Mount Tamalpais State Park", lat: 37.9154, lng: -122.5974, type: "park" },
-            { name: "Point Reyes National Seashore", lat: 38.0434, lng: -122.7994, type: "park" },
-            { name: "Muir Woods National Monument", lat: 37.8869, lng: -122.5810, type: "park" },
-            { name: "Angel Island State Park", lat: 37.8313, lng: -122.4324, type: "park" },
-            { name: "Henry Cowell Redwoods State Park", lat: 37.0381, lng: -122.2311, type: "park" },
-            { name: "Big Basin Redwoods State Park", lat: 37.1670, lng: -122.2352, type: "park" },
-            
-            // Bike Shops and Services
-            { name: "Mike's Bikes - San Francisco", lat: 37.7749, lng: -122.4194, type: "bike_shop" },
-            { name: "Performance Bicycles - Los Angeles", lat: 34.0522, lng: -118.2437, type: "bike_shop" },
-            { name: "Bicycle Kitchen - San Diego", lat: 32.7157, lng: -117.1611, type: "bike_shop" },
-            { name: "Sacramento Bike Shop", lat: 38.5816, lng: -121.4944, type: "bike_shop" },
-            
-            // Popular Destinations
-            { name: "Santa Monica Pier", lat: 34.0089, lng: -118.4974, type: "attraction" },
-            { name: "Hollywood Sign", lat: 34.1341, lng: -118.3215, type: "landmark" },
-            { name: "Griffith Observatory", lat: 34.1184, lng: -118.3004, type: "attraction" },
-            { name: "Disneyland", lat: 33.8121, lng: -117.9195, type: "attraction" },
-            { name: "Universal Studios Hollywood", lat: 34.1381, lng: -118.3534, type: "attraction" },
-            { name: "SeaWorld San Diego", lat: 32.7679, lng: -117.2261, type: "attraction" },
-            
-            // Cycling Trails
-            { name: "American River Bike Trail", lat: 38.5816, lng: -121.4944, type: "trail" },
-            { name: "Bay Trail", lat: 37.8044, lng: -122.2711, type: "trail" },
-            { name: "San Francisco Bay Trail", lat: 37.7749, lng: -122.4194, type: "trail" },
-            { name: "Los Angeles River Bike Path", lat: 34.0522, lng: -118.2437, type: "trail" },
-            { name: "Rose Bowl Loop", lat: 34.1478, lng: -118.1445, type: "trail" },
-            { name: "Marina Green Bike Path", lat: 37.8044, lng: -122.2711, type: "trail" },
-            
-            // Coffee Shops (Cyclist Friendly)
-            { name: "Blue Bottle Coffee - SF", lat: 37.7749, lng: -122.4194, type: "cafe" },
-            { name: "Philz Coffee - LA", lat: 34.0522, lng: -118.2437, type: "cafe" },
-            { name: "Cafe Grumpy - San Diego", lat: 32.7157, lng: -117.1611, type: "cafe" },
-            { name: "Four Barrel Coffee - SF", lat: 37.7749, lng: -122.4194, type: "cafe" },
-            { name: "Intelligentsia - LA", lat: 34.0522, lng: -118.2437, type: "cafe" }
-        ];
-        
         this.initMap();
         this.setupEventListeners();
-        this.setupAutoPopulate();
+        this.setupAddressSearch();
     }
     
     initMap() {
@@ -104,46 +44,161 @@ class BikeRoutePlanner {
         this.map.on('click', (e) => this.handleMapClick(e));
     }
     
-    setupAutoPopulate() {
-        // Add auto-populate buttons
-        const autoPopulateStartBtn = document.getElementById('autoPopulateStartBtn');
-        const autoPopulateEndBtn = document.getElementById('autoPopulateEndBtn');
-        
-        if (autoPopulateStartBtn) {
-            autoPopulateStartBtn.addEventListener('click', () => this.autoPopulateStart());
+    setupAddressSearch() {
+        // Setup address search for start point
+        const startInput = document.getElementById('startInput');
+        if (startInput) {
+            startInput.removeAttribute('readonly');
+            startInput.placeholder = 'Enter California address or use Current Location';
+            
+            // Add search functionality
+            let searchTimeout;
+            startInput.addEventListener('input', (e) => {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    this.searchAddress(e.target.value, 'start');
+                }, 500);
+            });
+            
+            // Add enter key support
+            startInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    this.resolveAddress(e.target.value, 'start');
+                }
+            });
         }
         
-        if (autoPopulateEndBtn) {
-            autoPopulateEndBtn.addEventListener('click', () => this.autoPopulateEnd());
+        // Setup address search for end point
+        const endInput = document.getElementById('endInput');
+        if (endInput) {
+            endInput.removeAttribute('readonly');
+            endInput.placeholder = 'Enter California address or click on map';
+            
+            // Add search functionality
+            let searchTimeout;
+            endInput.addEventListener('input', (e) => {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    this.searchAddress(e.target.value, 'end');
+                }, 500);
+            });
+            
+            // Add enter key support
+            endInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    this.resolveAddress(e.target.value, 'end');
+                }
+            });
         }
     }
     
-    autoPopulateStart() {
-        // Get random California POI for start point
-        const randomPOI = this.californiaPOI[Math.floor(Math.random() * this.californiaPOI.length)];
-        const latlng = L.latLng(randomPOI.lat, randomPOI.lng);
+    async searchAddress(query, type) {
+        if (query.length < 3) {
+            this.hideSuggestions(type);
+            return;
+        }
         
-        this.setStartPoint(latlng);
-        
-        // Show notification
-        this.showNotification(`Start point set to: ${randomPOI.name}`, 'success');
-        
-        // Center map on the location
-        this.map.setView(latlng, 13);
+        try {
+            // Use Nominatim API for address search, focused on California
+            const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query + ', California')}&limit=5&addressdetails=1`);
+            const results = await response.json();
+            
+            this.displaySuggestions(results, type);
+        } catch (error) {
+            console.error('Address search error:', error);
+        }
     }
     
-    autoPopulateEnd() {
-        // Get random California POI for end point
-        const randomPOI = this.californiaPOI[Math.floor(Math.random() * this.californiaPOI.length)];
-        const latlng = L.latLng(randomPOI.lat, randomPOI.lng);
+    displaySuggestions(results, type) {
+        // Remove existing suggestions
+        this.hideSuggestions(type);
         
-        this.setEndPoint(latlng);
+        if (results.length === 0) return;
         
-        // Show notification
-        this.showNotification(`End point set to: ${randomPOI.name}`, 'success');
+        // Create suggestions dropdown
+        const suggestionsDiv = document.createElement('div');
+        suggestionsDiv.className = 'address-suggestions';
+        suggestionsDiv.id = `${type}Suggestions`;
+        
+        results.forEach(result => {
+            const suggestionDiv = document.createElement('div');
+            suggestionDiv.className = 'suggestion-item';
+            
+            // Format display name
+            let displayName = result.display_name;
+            if (displayName.length > 60) {
+                displayName = displayName.substring(0, 60) + '...';
+            }
+            
+            suggestionDiv.textContent = displayName;
+            suggestionDiv.addEventListener('click', () => {
+                this.selectSuggestion(result, type);
+            });
+            
+            suggestionsDiv.appendChild(suggestionDiv);
+        });
+        
+        // Position suggestions below the input
+        const input = document.getElementById(`${type}Input`);
+        if (input) {
+            input.parentNode.style.position = 'relative';
+            suggestionsDiv.style.top = input.offsetHeight + 'px';
+            suggestionsDiv.style.left = '0';
+            suggestionsDiv.style.right = '0';
+            input.parentNode.appendChild(suggestionsDiv);
+        }
+    }
+    
+    hideSuggestions(type) {
+        const existingSuggestions = document.getElementById(`${type}Suggestions`);
+        if (existingSuggestions) {
+            existingSuggestions.remove();
+        }
+    }
+    
+    selectSuggestion(result, type) {
+        const latlng = L.latLng(parseFloat(result.lat), parseFloat(result.lon));
+        
+        if (type === 'start') {
+            this.setStartPoint(latlng);
+        } else if (type === 'end') {
+            this.setEndPoint(latlng);
+        }
+        
+        // Update input with selected address
+        const input = document.getElementById(`${type}Input`);
+        if (input) {
+            input.value = result.display_name;
+        }
+        
+        // Hide suggestions
+        this.hideSuggestions(type);
         
         // Center map on the location
-        this.map.setView(latlng, 13);
+        this.map.setView(latlng, 15);
+        
+        // Show notification
+        this.showNotification(`${type === 'start' ? 'Start' : 'End'} point set to: ${result.display_name}`, 'success');
+    }
+    
+    async resolveAddress(address, type) {
+        if (!address.trim()) return;
+        
+        try {
+            const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address + ', California')}&limit=1`);
+            const results = await response.json();
+            
+            if (results.length > 0) {
+                this.selectSuggestion(results[0], type);
+            } else {
+                this.showNotification('Address not found in California', 'error');
+            }
+        } catch (error) {
+            console.error('Address resolution error:', error);
+            this.showNotification('Failed to resolve address', 'error');
+        }
     }
     
     showNotification(message, type = 'info') {
