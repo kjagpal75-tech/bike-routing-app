@@ -264,7 +264,7 @@ class BikeRoutePlanner {
             this.setEndPoint(latlng);
         }
         
-        // Update input with selected address
+        // Update input with selected address (full address, not coordinates)
         const input = document.getElementById(`${type}Input`);
         if (input) {
             input.value = result.display_name;
@@ -403,8 +403,9 @@ class BikeRoutePlanner {
         
         this.startMarker = L.marker(latlng, { icon: this.startIcon, draggable: true }).addTo(this.map);
         
+        // Don't override the input field if it already has an address
         const startInput = document.getElementById('startInput');
-        if (startInput) {
+        if (startInput && !startInput.value) {
             startInput.value = `${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}`;
         }
         
@@ -419,8 +420,9 @@ class BikeRoutePlanner {
         
         this.endMarker = L.marker(latlng, { icon: this.endIcon, draggable: true }).addTo(this.map);
         
+        // Don't override the input field if it already has an address
         const endInput = document.getElementById('endInput');
-        if (endInput) {
+        if (endInput && !endInput.value) {
             endInput.value = `${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}`;
         }
         
@@ -468,16 +470,14 @@ class BikeRoutePlanner {
                 <span class="waypoint-number">Waypoint ${this.waypoints.length}</span>
                 <button class="remove-waypoint-btn" onclick="app.removeWaypoint(${waypointId})">✕</button>
             </div>
-            <input type="text" class="waypoint-input" id="waypointInput${waypointId}" placeholder="Enter California address or POI" value="${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}" />
+            <input type="text" class="waypoint-input" id="waypointInput${waypointId}" placeholder="Enter California address or POI" value="" />
         `;
         
         waypointsList.appendChild(waypointDiv);
         
         // Add address search functionality to this waypoint input
-        const waypointInput = document.getElementById(`waypointInput${waypointId}`);
-        if (waypointInput) {
-            this.setupWaypointAddressSearch(waypointInput, waypointId);
-        }
+        const waypointInput = waypointDiv.querySelector('.waypoint-input');
+        this.setupWaypointAddressSearch(waypointInput, waypointId);
     }
     
     setupWaypointAddressSearch(input, waypointId) {
@@ -640,7 +640,7 @@ class BikeRoutePlanner {
                     <span class="waypoint-number">Waypoint ${index + 1}</span>
                     <button class="remove-waypoint-btn" onclick="app.removeWaypoint(${waypoint.id})">✕</button>
                 </div>
-                <input type="text" class="waypoint-input" id="waypointInput${waypoint.id}" placeholder="Enter California address or POI" value="${waypoint.latlng.lat.toFixed(6)}, ${waypoint.latlng.lng.toFixed(6)}" />
+                <input type="text" class="waypoint-input" id="waypointInput${waypoint.id}" placeholder="Enter California address or POI" value="" />
             `;
             
             waypointsList.appendChild(waypointDiv);
