@@ -461,7 +461,7 @@ class BikeRoutePlanner {
             // Enable return to start mode
             if (this.startMarker) {
                 const startLatLng = this.startMarker.getLatLng();
-                this.setEndPoint(startLatLng);
+                this.setEndPointForReturnToStart(startLatLng);
                 
                 // Update end input with start location info
                 const startInput = document.getElementById('startInput');
@@ -632,7 +632,7 @@ class BikeRoutePlanner {
         // Check if return to start is enabled and update end point
         const returnToStartCheckbox = document.getElementById('returnToStart');
         if (returnToStartCheckbox && returnToStartCheckbox.checked) {
-            this.setEndPoint(latlng);
+            this.setEndPointForReturnToStart(latlng);
             
             // Update end input with start location info
             if (startInput) {
@@ -671,6 +671,26 @@ class BikeRoutePlanner {
         
         // Update waypoint counter
         this.updateWaypointCounter();
+    }
+    
+    setEndPointForReturnToStart(latlng) {
+        // Special method to set end point even when Return to Start is enabled
+        if (this.endMarker) {
+            this.map.removeLayer(this.endMarker);
+        }
+        
+        this.endMarker = L.marker(latlng, { icon: this.endIcon, draggable: true }).addTo(this.map);
+        
+        // Update end input with start location info
+        const startInput = document.getElementById('startInput');
+        if (startInput) {
+            const endInput = document.getElementById('endInput');
+            if (endInput) {
+                endInput.value = startInput.value;
+            }
+        }
+        
+        console.log('🔄 End point set for return to start route');
     }
     
     addWaypoint() {
@@ -1073,7 +1093,14 @@ class BikeRoutePlanner {
         // If return to start is enabled but end point isn't set, set it to start point
         if (returnToStart && !this.endMarker) {
             const startLatLng = this.startMarker.getLatLng();
-            this.setEndPoint(startLatLng);
+            this.setEndPointForReturnToStart(startLatLng);
+        }
+        
+        // Double-check we have both markers before proceeding
+        if (!this.startMarker || !this.endMarker) {
+            console.error('❌ Missing markers for route generation');
+            alert('Unable to generate route - missing start or end point');
+            return;
         }
         
         // Build coordinates array: start -> waypoints -> end -> (optional) start again
