@@ -423,10 +423,15 @@ class BikeRoutePlanner {
         const useImperialUnits = document.getElementById('useImperialUnits');
         if (useImperialUnits) {
             useImperialUnits.addEventListener('change', () => {
-                // Update displays when unit preference changes
+                console.log('🔄 Unit toggle changed - updating displays');
+                
+                // Update all displays when unit preference changes
                 if (this.currentRouteData) {
+                    console.log('🔄 Updating route info with new units');
                     this.displayRouteInfo(this.currentRouteData);
+                    
                     if (this.currentElevationData) {
+                        console.log('🔄 Updating elevation stats with new units');
                         this.displayElevationStats(
                             this.currentElevationData.gain,
                             this.currentElevationData.loss,
@@ -435,6 +440,18 @@ class BikeRoutePlanner {
                             this.currentRouteData
                         );
                     }
+                    
+                    // Update elevation profile if it exists
+                    const elevationDiv = document.getElementById('elevationProfile');
+                    if (elevationDiv && elevationDiv.style.display !== 'none') {
+                        console.log('🔄 Updating elevation profile with new units');
+                        // Re-display elevation profile with new units
+                        if (this.currentElevationData) {
+                            this.displayElevationProfile([], this.currentRouteData);
+                        }
+                    }
+                } else {
+                    console.log('🔄 No route data to update');
                 }
             });
         }
@@ -1512,32 +1529,6 @@ class BikeRoutePlanner {
             
             directionsDiv.appendChild(stepDiv);
         });
-    }
-    
-    displayRouteInfo(routeData) {
-        const routeInfoDiv = document.getElementById('routeInfo');
-        if (!routeInfoDiv) return;
-        
-        const distance = (routeData.distance / 1000).toFixed(2);
-        const duration = Math.round(routeData.duration / 60);
-        
-        routeInfoDiv.innerHTML = `
-            <h3>📊 Route Information</h3>
-            <div class="route-stats">
-                <div class="route-stat">
-                    <span class="stat-label">Distance:</span>
-                    <span class="stat-value">${distance} km</span>
-                </div>
-                <div class="route-stat">
-                    <span class="stat-label">Duration:</span>
-                    <span class="stat-value">${duration} min</span>
-                </div>
-                <div class="route-stat">
-                    <span class="stat-label">Avg Speed:</span>
-                    <span class="stat-value">${(distance / (duration / 60)).toFixed(1)} km/h</span>
-                </div>
-            </div>
-        `;
     }
     
     clearRoute() {
