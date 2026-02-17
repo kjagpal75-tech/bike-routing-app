@@ -438,6 +438,90 @@ class BikeRoutePlanner {
                 }
             });
         }
+        
+        // Return to start checkbox
+        const returnToStartCheckbox = document.getElementById('returnToStart');
+        if (returnToStartCheckbox) {
+            returnToStartCheckbox.addEventListener('change', () => {
+                this.handleReturnToStartToggle();
+            });
+        }
+    }
+    
+    handleReturnToStartToggle() {
+        const returnToStartCheckbox = document.getElementById('returnToStart');
+        const endInput = document.getElementById('endInput');
+        const endLocationBtn = document.getElementById('endLocationBtn');
+        
+        if (!returnToStartCheckbox || !endInput || !endLocationBtn) return;
+        
+        const isReturnToStart = returnToStartCheckbox.checked;
+        
+        if (isReturnToStart) {
+            // Enable return to start mode
+            if (this.startMarker) {
+                const startLatLng = this.startMarker.getLatLng();
+                this.setEndPoint(startLatLng);
+                
+                // Update end input with start location info
+                const startInput = document.getElementById('startInput');
+                if (startInput) {
+                    endInput.value = startInput.value;
+                }
+                
+                // Disable end input and location button
+                endInput.disabled = true;
+                endInput.style.backgroundColor = '#f0f0f0';
+                endInput.style.cursor = 'not-allowed';
+                endLocationBtn.disabled = true;
+                endLocationBtn.style.opacity = '0.5';
+                endLocationBtn.style.cursor = 'not-allowed';
+                
+                console.log('🔄 Return to start enabled - end point set to start location');
+            } else {
+                // No start point yet, disable end input until start is set
+                endInput.disabled = true;
+                endInput.style.backgroundColor = '#f0f0f0';
+                endInput.style.cursor = 'not-allowed';
+                endLocationBtn.disabled = true;
+                endLocationBtn.style.opacity = '0.5';
+                endLocationBtn.style.cursor = 'not-allowed';
+                
+                console.log('🔄 Return to start enabled - waiting for start point');
+            }
+        } else {
+            // Disable return to start mode
+            endInput.disabled = false;
+            endInput.style.backgroundColor = '#f9f9f9';
+            endInput.style.cursor = 'text';
+            endLocationBtn.disabled = false;
+            endLocationBtn.style.opacity = '1';
+            endLocationBtn.style.cursor = 'pointer';
+            
+            // Clear end point if it was set to start point
+            if (this.endMarker && this.startMarker) {
+                const startLatLng = this.startMarker.getLatLng();
+                const endLatLng = this.endMarker.getLatLng();
+                
+                if (startLatLng.lat === endLatLng.lat && startLatLng.lng === endLatLng.lng) {
+                    this.clearEndPoint();
+                }
+            }
+            
+            console.log('🔄 Return to start disabled - end point unlocked');
+        }
+    }
+    
+    clearEndPoint() {
+        if (this.endMarker) {
+            this.map.removeLayer(this.endMarker);
+            this.endMarker = null;
+        }
+        
+        const endInput = document.getElementById('endInput');
+        if (endInput) {
+            endInput.value = '';
+        }
     }
     
     handleMapClick(e) {
@@ -445,6 +529,12 @@ class BikeRoutePlanner {
         if (!this.startMarker) {
             this.setStartPoint(e.latlng);
         } else if (!this.endMarker) {
+            // Check if return to start is enabled
+            const returnToStartCheckbox = document.getElementById('returnToStart');
+            if (returnToStartCheckbox && returnToStartCheckbox.checked) {
+                console.log('🔄 Return to start is enabled - ignoring map click for end point');
+                return;
+            }
             this.setEndPoint(e.latlng);
         } else {
             this.addWaypointAtLocation(e.latlng);
@@ -539,11 +629,34 @@ class BikeRoutePlanner {
             startInput.value = `${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}`;
         }
         
+        // Check if return to start is enabled and update end point
+        const returnToStartCheckbox = document.getElementById('returnToStart');
+        if (returnToStartCheckbox && returnToStartCheckbox.checked) {
+            this.setEndPoint(latlng);
+            
+            // Update end input with start location info
+            if (startInput) {
+                const endInput = document.getElementById('endInput');
+                if (endInput) {
+                    endInput.value = startInput.value;
+                }
+            }
+            
+            console.log('🔄 Start point updated - end point synchronized for return to start');
+        }
+        
         // Update waypoint counter
         this.updateWaypointCounter();
     }
     
     setEndPoint(latlng) {
+        // Check if return to start is enabled - if so, don't allow manual end point setting
+        const returnToStartCheckbox = document.getElementById('returnToStart');
+        if (returnToStartCheckbox && returnToStartCheckbox.checked) {
+            console.log('🔄 Return to start is enabled - ignoring manual end point setting');
+            return;
+        }
+        
         if (this.endMarker) {
             this.map.removeLayer(this.endMarker);
         }
