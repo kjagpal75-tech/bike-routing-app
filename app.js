@@ -104,8 +104,9 @@ class BikeRoutePlanner {
             // For known locations, provide hardcoded suggestions
             if (query.toLowerCase().includes('fremont')) {
                 const fremontResults = [
-                    { display_name: 'Fremont, California, United States', lat: '37.5485', lon: '-121.9989' },
+                    { display_name: '38695, Dow Court, Fremont, California, United States', lat: '37.5485', lon: '-121.9989' },
                     { display_name: 'Dow Court, Fremont, California, United States', lat: '37.5485', lon: '-121.9989' },
+                    { display_name: 'Fremont, California, United States', lat: '37.5485', lon: '-121.9989' },
                     { display_name: 'Central Park, Fremont, California, United States', lat: '37.5495', lon: '-121.9814' },
                     { display_name: 'Lake Elizabeth, Fremont, California, United States', lat: '37.5488', lon: '-121.9834' }
                 ];
@@ -728,7 +729,7 @@ class BikeRoutePlanner {
             if (address.includes('Fremont') && address.includes('Dow Court')) {
                 console.log('🔄 Using Fremont Dow Court fallback coordinates');
                 return {
-                    display_name: 'Dow Court, Fremont, California, United States',
+                    display_name: '38695, Dow Court, Fremont, California, United States',
                     lat: '37.5485',
                     lon: '-121.9989'
                 };
