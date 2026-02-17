@@ -563,6 +563,73 @@ class BikeRoutePlanner {
         }
     }
     
+    async setupTestRoute() {
+        console.log('🧪 Setting up test route...');
+        
+        try {
+            // Clear existing route
+            this.clearRoute();
+            
+            // Set start point: 38695, Dow Court, Niles Junction, Niles District, Fremont, Alameda County, California, 94536, United States
+            const startAddress = "38695, Dow Court, Niles Junction, Niles District, Fremont, Alameda County, California, 94536, United States";
+            await this.resolveAddress(startAddress, 'start');
+            
+            // Set waypoint: Vargas Regional Park
+            const waypointAddress = "Vargas Regional Park, Fremont, California";
+            await this.addWaypointByAddress(waypointAddress);
+            
+            // Set end point: 38695, Dow Court, Niles Junction, Niles District, Fremont, Alameda County, California, 94536, United States
+            const endAddress = "38695, Dow Court, Niles Junction, Niles District, Fremont, Alameda County, California, 94536, United States";
+            await this.resolveAddress(endAddress, 'end');
+            
+            // Show notification
+            this.showNotification('Test route setup complete! Click "Generate Route" to see the route.', 'success');
+            
+        } catch (error) {
+            console.error('Test route setup error:', error);
+            this.showNotification('Failed to setup test route', 'error');
+        }
+    }
+    
+    async addWaypointByAddress(address) {
+        try {
+            const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address + ', California')}&limit=1`);
+            const results = await response.json();
+            
+            if (results.length > 0) {
+                const result = results[0];
+                const latlng = L.latLng(parseFloat(result.lat), parseFloat(result.lon));
+                
+                // Add waypoint at the resolved location
+                const waypointId = Date.now();
+                const waypoint = {
+                    id: waypointId,
+                    latlng: latlng,
+                    marker: L.marker(latlng, { icon: this.waypointIcon, draggable: true }).addTo(this.map)
+                };
+                
+                this.waypoints.push(waypoint);
+                this.addWaypointInput(waypointId, latlng);
+                this.updateWaypointCounter();
+                
+                // Update input with resolved address
+                const waypointInput = document.getElementById(`waypointInput${waypointId}`);
+                if (waypointInput) {
+                    waypointInput.value = result.display_name;
+                }
+                
+                // Show notification
+                this.showNotification(`Waypoint set to: ${result.display_name}`, 'success');
+                
+            } else {
+                this.showNotification('Address not found in California', 'error');
+            }
+        } catch (error) {
+            console.error('Waypoint address resolution error:', error);
+            this.showNotification('Failed to resolve address', 'error');
+        }
+    }
+    
     async generateRoute() {
         if (!this.startMarker || !this.endMarker) {
             alert('Please set both start and end points on the map');
@@ -711,4 +778,31 @@ class BikeRoutePlanner {
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🚀 DOM loaded, initializing Bike Route Planner...');
     window.app = new BikeRoutePlanner();
+    
+    // Add test button for specific route
+    setTimeout(() => {
+        const testButton = document.createElement('button');
+        testButton.textContent = '🧪 Test Fremont Route';
+        testButton.style.cssText = `
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            background: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 500;
+            z-index: 10000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        `;
+        
+        testButton.addEventListener('click', () => {
+            app.setupTestRoute();
+        });
+        
+        document.body.appendChild(testButton);
+    }, 1000);
 });
