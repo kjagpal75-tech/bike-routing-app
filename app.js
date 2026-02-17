@@ -7,8 +7,69 @@ class BikeRoutePlanner {
         this.waypoints = [];
         this.routeLayer = null;
         
+        // California POI data
+        this.californiaPOI = [
+            // Major Cities
+            { name: "San Francisco", lat: 37.7749, lng: -122.4194, type: "city" },
+            { name: "Los Angeles", lat: 34.0522, lng: -118.2437, type: "city" },
+            { name: "San Diego", lat: 32.7157, lng: -117.1611, type: "city" },
+            { name: "Sacramento", lat: 38.5816, lng: -121.4944, type: "city" },
+            { name: "San Jose", lat: 37.3382, lng: -121.8863, type: "city" },
+            { name: "Oakland", lat: 37.8044, lng: -122.2711, type: "city" },
+            { name: "Fresno", lat: 36.7378, lng: -119.7871, type: "city" },
+            { name: "Long Beach", lat: 33.7701, lng: -118.1934, type: "city" },
+            
+            // Popular Cycling Routes
+            { name: "Golden Gate Bridge", lat: 37.8199, lng: -122.4783, type: "landmark" },
+            { name: "Golden Gate Park", lat: 37.7694, lng: -122.4862, type: "park" },
+            { name: "Pacific Coast Highway", lat: 36.2704, lng: -121.8081, type: "route" },
+            { name: "Napa Valley", lat: 38.5025, lng: -122.2654, type: "region" },
+            { name: "Big Sur", lat: 36.2704, lng: -121.8081, type: "region" },
+            { name: "Lake Tahoe", lat: 39.0968, lng: -120.0324, type: "landmark" },
+            { name: "Yosemite Valley", lat: 37.7456, lng: -119.5936, type: "park" },
+            { name: "Death Valley", lat: 36.5323, lng: -116.9325, type: "park" },
+            
+            // Cycling POI
+            { name: "Mount Tamalpais State Park", lat: 37.9154, lng: -122.5974, type: "park" },
+            { name: "Point Reyes National Seashore", lat: 38.0434, lng: -122.7994, type: "park" },
+            { name: "Muir Woods National Monument", lat: 37.8869, lng: -122.5810, type: "park" },
+            { name: "Angel Island State Park", lat: 37.8313, lng: -122.4324, type: "park" },
+            { name: "Henry Cowell Redwoods State Park", lat: 37.0381, lng: -122.2311, type: "park" },
+            { name: "Big Basin Redwoods State Park", lat: 37.1670, lng: -122.2352, type: "park" },
+            
+            // Bike Shops and Services
+            { name: "Mike's Bikes - San Francisco", lat: 37.7749, lng: -122.4194, type: "bike_shop" },
+            { name: "Performance Bicycles - Los Angeles", lat: 34.0522, lng: -118.2437, type: "bike_shop" },
+            { name: "Bicycle Kitchen - San Diego", lat: 32.7157, lng: -117.1611, type: "bike_shop" },
+            { name: "Sacramento Bike Shop", lat: 38.5816, lng: -121.4944, type: "bike_shop" },
+            
+            // Popular Destinations
+            { name: "Santa Monica Pier", lat: 34.0089, lng: -118.4974, type: "attraction" },
+            { name: "Hollywood Sign", lat: 34.1341, lng: -118.3215, type: "landmark" },
+            { name: "Griffith Observatory", lat: 34.1184, lng: -118.3004, type: "attraction" },
+            { name: "Disneyland", lat: 33.8121, lng: -117.9195, type: "attraction" },
+            { name: "Universal Studios Hollywood", lat: 34.1381, lng: -118.3534, type: "attraction" },
+            { name: "SeaWorld San Diego", lat: 32.7679, lng: -117.2261, type: "attraction" },
+            
+            // Cycling Trails
+            { name: "American River Bike Trail", lat: 38.5816, lng: -121.4944, type: "trail" },
+            { name: "Bay Trail", lat: 37.8044, lng: -122.2711, type: "trail" },
+            { name: "San Francisco Bay Trail", lat: 37.7749, lng: -122.4194, type: "trail" },
+            { name: "Los Angeles River Bike Path", lat: 34.0522, lng: -118.2437, type: "trail" },
+            { name: "Rose Bowl Loop", lat: 34.1478, lng: -118.1445, type: "trail" },
+            { name: "Marina Green Bike Path", lat: 37.8044, lng: -122.2711, type: "trail" },
+            
+            // Coffee Shops (Cyclist Friendly)
+            { name: "Blue Bottle Coffee - SF", lat: 37.7749, lng: -122.4194, type: "cafe" },
+            { name: "Philz Coffee - LA", lat: 34.0522, lng: -118.2437, type: "cafe" },
+            { name: "Cafe Grumpy - San Diego", lat: 32.7157, lng: -117.1611, type: "cafe" },
+            { name: "Four Barrel Coffee - SF", lat: 37.7749, lng: -122.4194, type: "cafe" },
+            { name: "Intelligentsia - LA", lat: 34.0522, lng: -118.2437, type: "cafe" }
+        ];
+        
         this.initMap();
         this.setupEventListeners();
+        this.setupAutoPopulate();
     }
     
     initMap() {
@@ -41,6 +102,89 @@ class BikeRoutePlanner {
         
         // Add click handler to map
         this.map.on('click', (e) => this.handleMapClick(e));
+    }
+    
+    setupAutoPopulate() {
+        // Add auto-populate buttons
+        const autoPopulateStartBtn = document.getElementById('autoPopulateStartBtn');
+        const autoPopulateEndBtn = document.getElementById('autoPopulateEndBtn');
+        
+        if (autoPopulateStartBtn) {
+            autoPopulateStartBtn.addEventListener('click', () => this.autoPopulateStart());
+        }
+        
+        if (autoPopulateEndBtn) {
+            autoPopulateEndBtn.addEventListener('click', () => this.autoPopulateEnd());
+        }
+    }
+    
+    autoPopulateStart() {
+        // Get random California POI for start point
+        const randomPOI = this.californiaPOI[Math.floor(Math.random() * this.californiaPOI.length)];
+        const latlng = L.latLng(randomPOI.lat, randomPOI.lng);
+        
+        this.setStartPoint(latlng);
+        
+        // Show notification
+        this.showNotification(`Start point set to: ${randomPOI.name}`, 'success');
+        
+        // Center map on the location
+        this.map.setView(latlng, 13);
+    }
+    
+    autoPopulateEnd() {
+        // Get random California POI for end point
+        const randomPOI = this.californiaPOI[Math.floor(Math.random() * this.californiaPOI.length)];
+        const latlng = L.latLng(randomPOI.lat, randomPOI.lng);
+        
+        this.setEndPoint(latlng);
+        
+        // Show notification
+        this.showNotification(`End point set to: ${randomPOI.name}`, 'success');
+        
+        // Center map on the location
+        this.map.setView(latlng, 13);
+    }
+    
+    showNotification(message, type = 'info') {
+        // Create a simple notification
+        const notification = document.createElement('div');
+        notification.className = `notification notification-${type}`;
+        notification.textContent = message;
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: ${type === 'success' ? '#4CAF50' : '#2196F3'};
+            color: white;
+            padding: 12px 20px;
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            z-index: 10000;
+            font-size: 14px;
+            font-weight: 500;
+            max-width: 300px;
+            opacity: 0;
+            transform: translateY(-20px);
+            transition: all 0.3s ease;
+        `;
+        
+        document.body.appendChild(notification);
+        
+        // Animate in
+        setTimeout(() => {
+            notification.style.opacity = '1';
+            notification.style.transform = 'translateY(0)';
+        }, 100);
+        
+        // Remove after 3 seconds
+        setTimeout(() => {
+            notification.style.opacity = '0';
+            notification.style.transform = 'translateY(-20px)';
+            setTimeout(() => {
+                document.body.removeChild(notification);
+            }, 300);
+        }, 3000);
     }
     
     setupEventListeners() {

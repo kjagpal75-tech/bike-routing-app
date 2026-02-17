@@ -94,6 +94,37 @@ body {
     background: #f9f9f9;
 }
 
+.input-with-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+.input-with-buttons input {
+    flex: 1;
+    padding: 10px;
+    border: 2px solid #e0e0e0;
+    border-radius: 6px 0 0 6px;
+    font-size: 0.9rem;
+    background: #f9f9f9;
+}
+
+.auto-populate-btn {
+    padding: 10px 16px;
+    background: #FF9800;
+    color: white;
+    border: none;
+    border-radius: 0 6px 6px 0;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: background 0.3s ease;
+    white-space: nowrap;
+}
+
+.auto-populate-btn:hover {
+    background: #F57C00;
+}
+
 .waypoints-section {
     margin-bottom: 20px;
 }

@@ -23,7 +23,10 @@
                     
                     <div class="input-group">
                         <label>Start Point</label>
-                        <input type="text" id="startInput" placeholder="Click on map or use Current Location" readonly />
+                        <div class="input-with-buttons">
+                            <input type="text" id="startInput" placeholder="Click on map or use Current Location" readonly />
+                            <button id="autoPopulateStartBtn" class="auto-populate-btn">🎲 CA POI</button>
+                        </div>
                     </div>
                     
                     <div class="waypoints-section">
@@ -37,7 +40,10 @@
                     
                     <div class="input-group">
                         <label>End Point</label>
-                        <input type="text" id="endInput" placeholder="Click on map to set destination" readonly />
+                        <div class="input-with-buttons">
+                            <input type="text" id="endInput" placeholder="Click on map to set destination" readonly />
+                            <button id="autoPopulateEndBtn" class="auto-populate-btn">🎲 CA POI</button>
+                        </div>
                     </div>
                     
                     <div class="action-buttons">
