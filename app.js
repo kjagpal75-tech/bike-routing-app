@@ -704,9 +704,15 @@ class BikeRoutePlanner {
         ];
         
         try {
-            // Use OSRM's driving profile (best for road cycling)
+            // Get selected route type
+            const routeTypeSelect = document.getElementById('routeType');
+            const routeType = routeTypeSelect ? routeTypeSelect.value : 'drive';
+            
+            console.log(`🛣️ Using route type: ${routeType}`);
+            
+            // Use selected profile for routing
             const coordsStr = coordinates.map(c => `${c.lng},${c.lat}`).join(';');
-            const response = await fetch(`https://router.project-osrm.org/route/v1/driving/${coordsStr}?overview=full&geometries=geojson&steps=true`);
+            const response = await fetch(`https://router.project-osrm.org/route/v1/${routeType}/${coordsStr}?overview=full&geometries=geojson&steps=true`);
             
             const data = await response.json();
             
@@ -717,32 +723,255 @@ class BikeRoutePlanner {
                 this.displayRoute(routePoints, route);
                 this.displayTurnDirections(route.legs[0].steps);
                 this.displayRouteInfo(route);
+                
+                // Get elevation data for the route
+                await this.getElevationData(routePoints, route);
+                
+                console.log(` Route generated using ${routeType} profile`);
+                console.log(` Route distance: ${(route.distance / 1000).toFixed(2)} km`);
+                console.log(` Route duration: ${(route.duration / 60).toFixed(1)} min`);
             } else {
                 alert('No route found. Please try different points.');
             }
         } catch (error) {
             console.error('Route generation error:', error);
-            alert('Failed to generate route. Please try again.');
+            alert('Failed to generate route');
         }
     }
     
-    displayRoute(routePoints, routeData) {
-        // Remove existing route
-        if (this.routeLayer) {
-            this.map.removeLayer(this.routeLayer);
+    async getElevationData(routePoints, routeData) {
+        console.log('🏔️ Getting elevation data...');
+        
+        try {
+            // Sample points along the route (every 10th point to reduce API calls)
+            const samplePoints = [];
+            const sampleInterval = Math.max(1, Math.floor(routePoints.length / 100)); // Max 100 points
+            
+            for (let i = 0; i < routePoints.length; i += sampleInterval) {
+                samplePoints.push(routePoints[i]);
+            }
+            
+            // Add the last point to ensure we have the end elevation
+            if (samplePoints[samplePoints.length - 1] !== routePoints[routePoints.length - 1]) {
+                samplePoints.push(routePoints[routePoints.length - 1]);
+            }
+            
+            // Get elevation data from Open Elevation API
+            const locations = samplePoints.map(point => `${point.lat},${point.lng}`).join('|');
+            const elevationResponse = await fetch(`https://api.open-elevation.com/api/v1/lookup?locations=${locations}`);
+            const elevationData = await elevationResponse.json();
+            
+            console.log('🏔️ Elevation data received:', elevationData);
+            
+            if (elevationData.results && elevationData.results.length > 0) {
+                this.displayElevationProfile(elevationData.results, routeData);
+            } else {
+                console.log('❌ No elevation data available');
+                this.showElevationUnavailable();
+            }
+            
+        } catch (error) {
+            console.error('❌ Elevation data error:', error);
+            this.showElevationUnavailable();
+        }
+    }
+    
+    displayElevationProfile(elevationData, routeData) {
+        const elevationDiv = document.getElementById('elevationProfile');
+        if (!elevationDiv) return;
+        
+        // Calculate elevation statistics
+        const elevations = elevationData.map(point => point.elevation);
+        const distances = elevationData.map((point, index) => {
+            if (index === 0) return 0;
+            const prevPoint = elevationData[index - 1];
+            const distance = this.calculateDistance(
+                prevPoint.latitude, prevPoint.longitude,
+                point.latitude, point.longitude
+            );
+            return distance;
+        });
+        
+        // Calculate cumulative distances
+        const cumulativeDistances = [];
+        let totalDistance = 0;
+        for (let i = 0; i < distances.length; i++) {
+            cumulativeDistances.push(totalDistance);
+            totalDistance += distances[i];
         }
         
-        // Add new route with cycling-friendly styling
-        this.routeLayer = L.polyline(routePoints, {
-            color: '#4CAF50',
-            weight: 6,
-            opacity: 0.8,
-            smoothFactor: 1
-        }).addTo(this.map);
+        const elevationGain = this.calculateElevationGain(elevations);
+        const elevationLoss = this.calculateElevationLoss(elevations);
+        const peakElevation = Math.max(...elevations);
+        const minElevation = Math.min(...elevations);
         
-        // Fit map to show entire route
-        const bounds = L.latLngBounds(routePoints);
-        this.map.fitBounds(bounds, { padding: [50, 50] });
+        // Create elevation chart
+        this.createElevationChart(cumulativeDistances, elevations, elevationGain, elevationLoss, peakElevation, minElevation);
+        
+        // Display elevation statistics
+        this.displayElevationStats(elevationGain, elevationLoss, peakElevation, minElevation, routeData);
+        
+        console.log(`🏔️ Elevation stats - Gain: ${elevationGain.toFixed(0)}m, Loss: ${elevationLoss.toFixed(0)}m, Peak: ${peakElevation.toFixed(0)}m`);
+    }
+    
+    calculateDistance(lat1, lon1, lat2, lon2) {
+        const R = 6371000; // Earth's radius in meters
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                  Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                  Math.sin(dLon/2) * Math.sin(dLon/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        return R * c;
+    }
+    
+    calculateElevationGain(elevations) {
+        let gain = 0;
+        for (let i = 1; i < elevations.length; i++) {
+            if (elevations[i] > elevations[i-1]) {
+                gain += elevations[i] - elevations[i-1];
+            }
+        }
+        return gain;
+    }
+    
+    calculateElevationLoss(elevations) {
+        let loss = 0;
+        for (let i = 1; i < elevations.length; i++) {
+            if (elevations[i] < elevations[i-1]) {
+                loss += elevations[i-1] - elevations[i];
+            }
+        }
+        return loss;
+    }
+    
+    createElevationChart(distances, elevations, gain, loss, peak, min) {
+        const elevationDiv = document.getElementById('elevationProfile');
+        if (!elevationDiv) return;
+        
+        elevationDiv.style.display = 'block';
+        elevationDiv.innerHTML = `
+            <h3>🏔️ Elevation Profile</h3>
+            <div class="elevation-stats">
+                <div class="elevation-stat">
+                    <span class="stat-label">Elevation Gain:</span>
+                    <span class="stat-value">${gain.toFixed(0)} m</span>
+                </div>
+                <div class="elevation-stat">
+                    <span class="stat-label">Elevation Loss:</span>
+                    <span class="stat-value">${loss.toFixed(0)} m</span>
+                </div>
+                <div class="elevation-stat">
+                    <span class="stat-label">Peak Elevation:</span>
+                    <span class="stat-value">${peak.toFixed(0)} m</span>
+                </div>
+                <div class="elevation-stat">
+                    <span class="stat-label">Min Elevation:</span>
+                    <span class="stat-value">${min.toFixed(0)} m</span>
+                </div>
+            </div>
+            <div class="elevation-chart-container">
+                <canvas id="elevationChart" width="400" height="200"></canvas>
+            </div>
+        `;
+        
+        // Create simple elevation chart using canvas
+        setTimeout(() => {
+            const canvas = document.getElementById('elevationChart');
+            if (canvas) {
+                const ctx = canvas.getContext('2d');
+                const width = canvas.width;
+                const height = canvas.height;
+                
+                // Clear canvas
+                ctx.clearRect(0, 0, width, height);
+                
+                // Draw elevation line
+                ctx.strokeStyle = '#FF6B35';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                
+                const maxElevation = Math.max(...elevations);
+                const minElevation = Math.min(...elevations);
+                const elevationRange = maxElevation - minElevation;
+                
+                elevations.forEach((elevation, index) => {
+                    const x = (index / (elevations.length - 1)) * width;
+                    const y = height - ((elevation - minElevation) / elevationRange) * height;
+                    
+                    if (index === 0) {
+                        ctx.moveTo(x, y);
+                    } else {
+                        ctx.lineTo(x, y);
+                    }
+                });
+                
+                ctx.stroke();
+                
+                // Fill area under the line
+                ctx.fillStyle = 'rgba(255, 107, 53, 0.1)';
+                ctx.lineTo(width, height);
+                ctx.lineTo(0, height);
+                ctx.closePath();
+                ctx.fill();
+            }
+        }, 100);
+    }
+    
+    displayElevationStats(gain, loss, peak, min, routeData) {
+        const routeInfoDiv = document.getElementById('routeInfo');
+        if (!routeInfoDiv) return;
+        
+        // Find existing elevation stats or create new ones
+        let elevationStatsDiv = routeInfoDiv.querySelector('.elevation-stats');
+        if (!elevationStatsDiv) {
+            elevationStatsDiv = document.createElement('div');
+            elevationStatsDiv.className = 'elevation-stats';
+            routeInfoDiv.appendChild(elevationStatsDiv);
+        }
+        
+        elevationStatsDiv.innerHTML = `
+            <div class="route-stat">
+                <span class="stat-icon">📏</span>
+                <span class="stat-text">Distance: ${(routeData.distance / 1000).toFixed(2)} km</span>
+            </div>
+            <div class="route-stat">
+                <span class="stat-icon">⏱️</span>
+                <span class="stat-text">Duration: ${(routeData.duration / 60).toFixed(1)} min</span>
+            </div>
+            <div class="route-stat">
+                <span class="stat-icon">🚴</span>
+                <span class="stat-text">Avg Speed: ${(routeData.distance / 1000 / (routeData.duration / 60)).toFixed(1)} km/h</span>
+            </div>
+            <div class="route-stat">
+                <span class="stat-icon">🏔️</span>
+                <span class="stat-text">Elevation Gain: ${gain.toFixed(0)} m</span>
+            </div>
+            <div class="route-stat">
+                <span class="stat-icon">📉</span>
+                <span class="stat-text">Elevation Loss: ${loss.toFixed(0)} m</span>
+            </div>
+            <div class="route-stat">
+                <span class="stat-icon">⛰️</span>
+                <span class="stat-text">Peak Elevation: ${peak.toFixed(0)} m</span>
+            </div>
+        `;
+    }
+    
+    showElevationUnavailable() {
+        const routeInfoDiv = document.getElementById('routeInfo');
+        if (!routeInfoDiv) return;
+        
+        const elevationStatsDiv = routeInfoDiv.querySelector('.elevation-stats');
+        if (elevationStatsDiv) {
+            const elevationStat = document.createElement('div');
+            elevationStat.className = 'route-stat';
+            elevationStat.innerHTML = `
+                <span class="stat-icon">🏔️</span>
+                <span class="stat-text">Elevation data unavailable</span>
+            `;
+            elevationStatsDiv.appendChild(elevationStat);
+        }
     }
     
     displayTurnDirections(steps) {
