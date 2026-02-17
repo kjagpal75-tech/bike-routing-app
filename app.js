@@ -736,11 +736,11 @@ class BikeRoutePlanner {
             }
             
             if (address.includes('Vargas Regional Park')) {
-                console.log('� Using Vargas Regional Park fallback coordinates');
+                console.log('🔄 Using Vargas Regional Park fallback coordinates');
                 return {
                     display_name: 'Vargas Regional Park, Fremont, California, United States',
-                    lat: '37.5556',
-                    lon: '-121.9876'
+                    lat: '37.5345',
+                    lon: '-121.9983'
                 };
             }
             
@@ -774,7 +774,9 @@ class BikeRoutePlanner {
             const result = await this.tryResolveAddress(address);
             
             if (result) {
+                console.log(`🔍 Waypoint resolution result:`, result);
                 const latlng = L.latLng(parseFloat(result.lat), parseFloat(result.lon));
+                console.log(`📍 Waypoint coordinates: ${latlng.lat}, ${latlng.lng}`);
                 
                 // Add waypoint at the resolved location
                 const waypointId = Date.now();
