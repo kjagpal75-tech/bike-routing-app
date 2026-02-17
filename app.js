@@ -371,14 +371,16 @@ class BikeRoutePlanner {
                 <span class="waypoint-number">Waypoint ${this.waypoints.length}</span>
                 <button class="remove-waypoint-btn" onclick="app.removeWaypoint(${waypointId})">✕</button>
             </div>
-            <input type="text" class="waypoint-input" placeholder="Enter California address or POI" value="${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}" />
+            <input type="text" class="waypoint-input" id="waypointInput${waypointId}" placeholder="Enter California address or POI" value="${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}" />
         `;
         
         waypointsList.appendChild(waypointDiv);
         
         // Add address search functionality to this waypoint input
-        const waypointInput = waypointDiv.querySelector('.waypoint-input');
-        this.setupWaypointAddressSearch(waypointInput, waypointId);
+        const waypointInput = document.getElementById(`waypointInput${waypointId}`);
+        if (waypointInput) {
+            this.setupWaypointAddressSearch(waypointInput, waypointId);
+        }
     }
     
     setupWaypointAddressSearch(input, waypointId) {
@@ -541,10 +543,16 @@ class BikeRoutePlanner {
                     <span class="waypoint-number">Waypoint ${index + 1}</span>
                     <button class="remove-waypoint-btn" onclick="app.removeWaypoint(${waypoint.id})">✕</button>
                 </div>
-                <input type="text" class="waypoint-input" placeholder="Waypoint location" value="${waypoint.latlng.lat.toFixed(6)}, ${waypoint.latlng.lng.toFixed(6)}" readonly />
+                <input type="text" class="waypoint-input" id="waypointInput${waypoint.id}" placeholder="Enter California address or POI" value="${waypoint.latlng.lat.toFixed(6)}, ${waypoint.latlng.lng.toFixed(6)}" />
             `;
             
             waypointsList.appendChild(waypointDiv);
+            
+            // Add address search functionality to this waypoint input
+            const waypointInput = document.getElementById(`waypointInput${waypoint.id}`);
+            if (waypointInput) {
+                this.setupWaypointAddressSearch(waypointInput, waypoint.id);
+            }
         });
     }
     
