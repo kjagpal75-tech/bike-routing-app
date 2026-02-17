@@ -806,6 +806,80 @@ class BikeRoutePlanner {
         }
     }
     
+    displayRoute(routePoints, routeData) {
+        if (this.routeLayer) {
+            this.map.removeLayer(this.routeLayer);
+        }
+        
+        // Get route type for styling
+        const routeTypeSelect = document.getElementById('routeType');
+        const routeType = routeTypeSelect ? routeTypeSelect.value : 'drive';
+        
+        let routeColor = '#4CAF50'; // Default green
+        let routeWeight = 6;
+        
+        if (routeType === 'drive') {
+            routeColor = '#4CAF50'; // Green for road cycling
+            routeWeight = 6;
+        } else if (routeType === 'cycling') {
+            routeColor = '#FF6B35'; // Orange for mixed trails
+            routeWeight = 5;
+        } else if (routeType === 'foot') {
+            routeColor = '#2196F3'; // Blue for walking
+            routeWeight = 4;
+        }
+        
+        this.routeLayer = L.polyline(routePoints, {
+            color: routeColor,
+            weight: routeWeight,
+            opacity: 0.8,
+            smoothFactor: 1
+        }).addTo(this.map);
+        
+        // Fit map to show entire route
+        const bounds = L.latLngBounds(routePoints);
+        this.map.fitBounds(bounds, { padding: [50, 50] });
+        
+        // Show route info panel
+        const routeInfoDiv = document.getElementById('routeInfo');
+        if (routeInfoDiv) {
+            routeInfoDiv.style.display = 'block';
+        }
+        
+        // Show turn directions panel
+        const turnDirectionsDiv = document.getElementById('turnDirections');
+        if (turnDirectionsDiv) {
+            turnDirectionsDiv.style.display = 'block';
+        }
+    }
+    
+    displayRouteInfo(routeData) {
+        const routeInfoDiv = document.getElementById('routeInfo');
+        if (!routeInfoDiv) return;
+        
+        routeInfoDiv.style.display = 'block';
+        
+        const distance = (routeData.distance / 1000).toFixed(2);
+        const duration = Math.round(routeData.duration / 60);
+        
+        routeInfoDiv.innerHTML = `
+            <div class="route-stats">
+                <div class="route-stat">
+                    <span class="stat-icon">📏</span>
+                    <span class="stat-text">Distance: ${distance} km</span>
+                </div>
+                <div class="route-stat">
+                    <span class="stat-icon">⏱️</span>
+                    <span class="stat-text">Duration: ${duration} min</span>
+                </div>
+                <div class="route-stat">
+                    <span class="stat-icon">🚴</span>
+                    <span class="stat-text">Avg Speed: ${(distance / (duration / 60)).toFixed(1)} km/h</span>
+                </div>
+            </div>
+        `;
+    }
+    
     async getElevationData(routePoints, routeData) {
         console.log('🏔️ Getting elevation data...');
         
