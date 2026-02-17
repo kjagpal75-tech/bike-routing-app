@@ -1054,14 +1054,27 @@ class BikeRoutePlanner {
     }
     
     async generateRoute() {
-        if (!this.startMarker || !this.endMarker) {
-            alert('Please set both start and end points on the map');
+        // Check if start point is set (required for all routes)
+        if (!this.startMarker) {
+            alert('Please set a start point on the map');
             return;
         }
         
-        // Check if return to start is checked
+        // Check if return to start is enabled
         const returnToStartCheckbox = document.getElementById('returnToStart');
         const returnToStart = returnToStartCheckbox ? returnToStartCheckbox.checked : false;
+        
+        // If return to start is not enabled, check for end point
+        if (!returnToStart && !this.endMarker) {
+            alert('Please set an end point on the map, or check "Return to Start" for a round trip');
+            return;
+        }
+        
+        // If return to start is enabled but end point isn't set, set it to start point
+        if (returnToStart && !this.endMarker) {
+            const startLatLng = this.startMarker.getLatLng();
+            this.setEndPoint(startLatLng);
+        }
         
         // Build coordinates array: start -> waypoints -> end -> (optional) start again
         let coordinates = [
