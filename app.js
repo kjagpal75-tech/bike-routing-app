@@ -33,13 +33,25 @@ class BikeRoutePlanner {
         
         console.log('🔄 convertDistance called with:', meters, 'meters');
         
+        // OSRM returns distance in meters, but let's handle potential unit issues
+        let actualMeters = meters;
+        
+        // If the value seems too large to be meters, it might already be in a different unit
+        if (meters > 1000000) {
+            console.warn('⚠️ Distance value seems too large for meters:', meters);
+            // If it's > 1,000,000, it might be in centimeters or there's an error
+            // Let's assume it's in kilometers and convert to meters
+            actualMeters = meters / 1000;
+            console.log('🔄 Assuming input was in cm or had error, converting to meters:', actualMeters);
+        }
+        
         if (isImperial) {
-            const miles = meters * 0.621371;
-            console.log('🔄 Converting to miles:', miles);
+            const miles = actualMeters * 0.621371;
+            console.log('🔄 Converting', actualMeters, 'meters to miles:', miles);
             return miles.toFixed(2) + ' miles';
         } else {
-            const km = meters / 1000;
-            console.log('🔄 Converting to km:', km);
+            const km = actualMeters / 1000;
+            console.log('🔄 Converting', actualMeters, 'meters to km:', km);
             return km.toFixed(2) + ' km';
         }
     }
