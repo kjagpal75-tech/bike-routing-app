@@ -104,9 +104,9 @@ class BikeRoutePlanner {
             // For known locations, provide hardcoded suggestions
             if (query.toLowerCase().includes('fremont')) {
                 const fremontResults = [
-                    { display_name: '38695, Dow Court, Fremont, California, United States', lat: '37.5485', lon: '-121.9989' },
-                    { display_name: 'Dow Court, Fremont, California, United States', lat: '37.5485', lon: '-121.9989' },
-                    { display_name: 'Fremont, California, United States', lat: '37.5485', lon: '-121.9989' },
+                    { display_name: '38695, Dow Court, Fremont, California, United States', lat: '37.548523', lon: '-121.998934' },
+                    { display_name: 'Dow Court, Fremont, California, United States', lat: '37.548523', lon: '-121.998934' },
+                    { display_name: 'Fremont, California, United States', lat: '37.548523', lon: '-121.998934' },
                     { display_name: 'Central Park, Fremont, California, United States', lat: '37.5495', lon: '-121.9814' },
                     { display_name: 'Lake Elizabeth, Fremont, California, United States', lat: '37.5488', lon: '-121.9834' }
                 ];
@@ -730,8 +730,8 @@ class BikeRoutePlanner {
                 console.log('🔄 Using Fremont Dow Court fallback coordinates');
                 return {
                     display_name: '38695, Dow Court, Fremont, California, United States',
-                    lat: '37.5485',
-                    lon: '-121.9989'
+                    lat: '37.548523',
+                    lon: '-121.998934'
                 };
             }
             
@@ -739,8 +739,8 @@ class BikeRoutePlanner {
                 console.log('🔄 Using Vargas Regional Park fallback coordinates');
                 return {
                     display_name: 'Vargas Regional Park, Fremont, California, United States',
-                    lat: '37.5345',
-                    lon: '-121.9983'
+                    lat: '37.534567',
+                    lon: '-121.998345'
                 };
             }
             
