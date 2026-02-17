@@ -1102,6 +1102,13 @@ class BikeRoutePlanner {
             console.log('🏔️ Elevation data received:', elevationData);
             
             if (elevationData.results && elevationData.results.length > 0) {
+                // Calculate elevation statistics
+                const elevations = elevationData.results.map(result => result.elevation);
+                const elevationGain = this.calculateElevationGain(elevations);
+                const elevationLoss = this.calculateElevationLoss(elevations);
+                const peakElevation = Math.max(...elevations);
+                const minElevation = Math.min(...elevations);
+                
                 // Store current elevation data for unit conversion
                 this.currentElevationData = {
                     gain: elevationGain,
@@ -1294,6 +1301,22 @@ class BikeRoutePlanner {
             <div class="route-stat">
                 <span class="stat-icon">🏞</span>
                 <span class="stat-text">Min Elevation: ${minText}</span>
+            </div>
+        `;
+    }
+    
+    showElevationUnavailable() {
+        const elevationDiv = document.getElementById('elevationProfile');
+        if (!elevationDiv) return;
+        
+        elevationDiv.style.display = 'block';
+        elevationDiv.innerHTML = `
+            <h3>🏔️ Elevation Profile</h3>
+            <div class="elevation-stats">
+                <div class="route-stat">
+                    <span class="stat-icon">📊</span>
+                    <span class="stat-text">Elevation data unavailable</span>
+                </div>
             </div>
         `;
     }
