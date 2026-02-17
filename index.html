@@ -23,7 +23,10 @@
                     
                     <div class="input-group">
                         <label>Start Point</label>
-                        <input type="text" id="startInput" placeholder="Enter California address or use Current Location" />
+                        <div class="input-with-buttons">
+                            <input type="text" id="startInput" placeholder="Enter California address or use Current Location" />
+                            <button id="startLocationBtn" class="location-btn">📍 Get Location</button>
+                        </div>
                     </div>
                     
                     <div class="waypoints-section">
@@ -37,7 +40,18 @@
                     
                     <div class="input-group">
                         <label>End Point</label>
-                        <input type="text" id="endInput" placeholder="Enter California address or click on map" />
+                        <div class="input-with-buttons">
+                            <input type="text" id="endInput" placeholder="Enter California address or click on map" />
+                            <button id="endLocationBtn" class="location-btn">📍 Get Location</button>
+                        </div>
+                    </div>
+                    
+                    <div class="route-options">
+                        <label class="checkbox-container">
+                            <input type="checkbox" id="returnToStart">
+                            <span class="checkmark"></span>
+                            Return to Start (Round Trip)
+                        </label>
                     </div>
                     
                     <div class="action-buttons">

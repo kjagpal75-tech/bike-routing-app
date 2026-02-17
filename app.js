@@ -346,6 +346,18 @@ class BikeRoutePlanner {
             currentLocationBtn.addEventListener('click', () => this.getCurrentLocation());
         }
         
+        // Start location button
+        const startLocationBtn = document.getElementById('startLocationBtn');
+        if (startLocationBtn) {
+            startLocationBtn.addEventListener('click', () => this.getStartLocation());
+        }
+        
+        // End location button
+        const endLocationBtn = document.getElementById('endLocationBtn');
+        if (endLocationBtn) {
+            endLocationBtn.addEventListener('click', () => this.getEndLocation());
+        }
+        
         // Generate route button
         const generateRouteBtn = document.getElementById('generateRouteBtn');
         if (generateRouteBtn) {
@@ -390,9 +402,64 @@ class BikeRoutePlanner {
             this.map.setView(latlng, 15);
             this.setStartPoint(latlng);
             
+            this.showNotification('Current location set as start point', 'success');
         } catch (error) {
             console.error('Location error:', error);
-            alert('Unable to get your location. Please check your browser settings.');
+            this.showNotification('Unable to get current location', 'error');
+        }
+    }
+    
+    async getStartLocation() {
+        try {
+            const position = await new Promise((resolve, reject) => {
+                navigator.geolocation.getCurrentPosition(resolve, reject, {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 60000
+                });
+            });
+            
+            const latlng = L.latLng(position.coords.latitude, position.coords.longitude);
+            this.map.setView(latlng, 15);
+            this.setStartPoint(latlng);
+            
+            // Update input with location info
+            const startInput = document.getElementById('startInput');
+            if (startInput) {
+                startInput.value = `Current Location (${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)})`;
+            }
+            
+            this.showNotification('Current location set as start point', 'success');
+        } catch (error) {
+            console.error('Start location error:', error);
+            this.showNotification('Unable to get current location', 'error');
+        }
+    }
+    
+    async getEndLocation() {
+        try {
+            const position = await new Promise((resolve, reject) => {
+                navigator.geolocation.getCurrentPosition(resolve, reject, {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 60000
+                });
+            });
+            
+            const latlng = L.latLng(position.coords.latitude, position.coords.longitude);
+            this.map.setView(latlng, 15);
+            this.setEndPoint(latlng);
+            
+            // Update input with location info
+            const endInput = document.getElementById('endInput');
+            if (endInput) {
+                endInput.value = `Current Location (${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)})`;
+            }
+            
+            this.showNotification('Current location set as end point', 'success');
+        } catch (error) {
+            console.error('End location error:', error);
+            this.showNotification('Unable to get current location', 'error');
         }
     }
     
@@ -816,12 +883,21 @@ class BikeRoutePlanner {
             return;
         }
         
-        // Build coordinates array: start -> waypoints -> end
-        const coordinates = [
+        // Check if return to start is checked
+        const returnToStartCheckbox = document.getElementById('returnToStart');
+        const returnToStart = returnToStartCheckbox ? returnToStartCheckbox.checked : false;
+        
+        // Build coordinates array: start -> waypoints -> end -> (optional) start again
+        let coordinates = [
             this.startMarker.getLatLng(),
             ...this.waypoints.map(w => w.latlng),
             this.endMarker.getLatLng()
         ];
+        
+        // If return to start is checked, add start point again at the end
+        if (returnToStart) {
+            coordinates.push(this.startMarker.getLatLng());
+        }
         
         try {
             // Get selected route type
@@ -829,6 +905,7 @@ class BikeRoutePlanner {
             const routeType = routeTypeSelect ? routeTypeSelect.value : 'drive';
             
             console.log(`🛣️ Using route type: ${routeType}`);
+            console.log(`🔄 Return to start: ${returnToStart}`);
             
             // Use selected profile for routing
             const coordsStr = coordinates.map(c => `${c.lng},${c.lat}`).join(';');
@@ -850,6 +927,7 @@ class BikeRoutePlanner {
                 console.log(` Route generated using ${routeType} profile`);
                 console.log(` Route distance: ${(route.distance / 1000).toFixed(2)} km`);
                 console.log(` Route duration: ${(route.duration / 60).toFixed(1)} min`);
+                console.log(` Return to start: ${returnToStart ? 'Yes' : 'No'}`);
             } else {
                 alert('No route found. Please try different points.');
             }
