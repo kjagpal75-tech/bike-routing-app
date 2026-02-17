@@ -291,6 +291,24 @@ body {
     border: 1px solid #e0e0e0;
 }
 
+.unit-toggle {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: #333;
+    user-select: none;
+    margin-top: 10px;
+}
+
+.unit-toggle input[type="checkbox"] {
+    display: none;
+}
+
+.unit-toggle input[type="checkbox"]:checked + .checkmark {
+    background: #2196F3;
+}
+
 .checkbox-container {
     display: flex;
     align-items: center;

@@ -21,7 +21,19 @@ class BikeRoutePlanner {
             attribution: '© OpenStreetMap contributors'
         }).addTo(this.map);
         
-        // Create custom icons
+        convertDistance(meters) {
+        const useImperial = document.getElementById('useImperialUnits');
+        const isImperial = useImperial ? useImperial.checked : false;
+        
+        if (isImperial) {
+            const miles = meters * 0.621371;
+            return miles.toFixed(2) + ' miles';
+        } else {
+            return (meters / 1000).toFixed(2) + ' km';
+        }
+    }
+    
+    // Create custom icons
         this.startIcon = L.divIcon({ 
             html: '<div style="background: #4CAF50; color: white; border-radius: 50%; width: 35px; height: 35px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px; box-shadow: 0 2px 6px rgba(0,0,0,0.3); border: 2px solid white;">S</div>',
             iconSize: [35, 35],
@@ -374,6 +386,26 @@ class BikeRoutePlanner {
         const addWaypointBtn = document.getElementById('addWaypointBtn');
         if (addWaypointBtn) {
             addWaypointBtn.addEventListener('click', () => this.addWaypoint());
+        }
+        
+        // Unit toggle
+        const useImperialUnits = document.getElementById('useImperialUnits');
+        if (useImperialUnits) {
+            useImperialUnits.addEventListener('change', () => {
+                // Update displays when unit preference changes
+                if (this.currentRouteData) {
+                    this.displayRouteInfo(this.currentRouteData);
+                    if (this.currentElevationData) {
+                        this.displayElevationStats(
+                            this.currentElevationData.gain,
+                            this.currentElevationData.loss,
+                            this.currentElevationData.peak,
+                            this.currentElevationData.min,
+                            this.currentRouteData
+                        );
+                    }
+                }
+            });
         }
     }
     
@@ -917,6 +949,9 @@ class BikeRoutePlanner {
                 const route = data.routes[0];
                 const routePoints = route.geometry.coordinates.map(coord => L.latLng(coord[1], coord[0]));
                 
+                // Store current route data for unit conversion
+                this.currentRouteData = route;
+                
                 this.displayRoute(routePoints, route);
                 this.displayTurnDirections(route.legs[0].steps);
                 this.displayRouteInfo(route);
@@ -990,14 +1025,14 @@ class BikeRoutePlanner {
         
         routeInfoDiv.style.display = 'block';
         
-        const distance = (routeData.distance / 1000).toFixed(2);
+        const distance = this.convertDistance(routeData.distance);
         const duration = Math.round(routeData.duration / 60);
         
         routeInfoDiv.innerHTML = `
             <div class="route-stats">
                 <div class="route-stat">
                     <span class="stat-icon">📏</span>
-                    <span class="stat-text">Distance: ${distance} km</span>
+                    <span class="stat-text">Distance: ${distance}</span>
                 </div>
                 <div class="route-stat">
                     <span class="stat-icon">⏱️</span>
@@ -1005,7 +1040,7 @@ class BikeRoutePlanner {
                 </div>
                 <div class="route-stat">
                     <span class="stat-icon">🚴</span>
-                    <span class="stat-text">Avg Speed: ${(distance / (duration / 60)).toFixed(1)} km/h</span>
+                    <span class="stat-text">Avg Speed: ${this.convertSpeed(routeData.distance / 1000 / (routeData.duration / 60))}</span>
                 </div>
             </div>
         `;
@@ -1036,6 +1071,14 @@ class BikeRoutePlanner {
             console.log('🏔️ Elevation data received:', elevationData);
             
             if (elevationData.results && elevationData.results.length > 0) {
+                // Store current elevation data for unit conversion
+                this.currentElevationData = {
+                    gain: elevationGain,
+                    loss: elevationLoss,
+                    peak: peakElevation,
+                    min: minElevation
+                };
+                
                 this.displayElevationProfile(elevationData.results, routeData);
             } else {
                 console.log('❌ No elevation data available');
@@ -1184,48 +1227,44 @@ class BikeRoutePlanner {
             routeInfoDiv.appendChild(elevationStatsDiv);
         }
         
+        const distanceText = this.convertDistance(routeData.distance);
+        const durationText = Math.round(routeData.duration / 60) + ' min';
+        const speedText = this.convertSpeed(routeData.distance / 1000 / (routeData.duration / 60));
+        const gainText = this.convertElevation(gain);
+        const lossText = this.convertElevation(loss);
+        const peakText = this.convertElevation(peak);
+        const minText = this.convertElevation(min);
+        
         elevationStatsDiv.innerHTML = `
             <div class="route-stat">
                 <span class="stat-icon">📏</span>
-                <span class="stat-text">Distance: ${(routeData.distance / 1000).toFixed(2)} km</span>
+                <span class="stat-text">Distance: ${distanceText}</span>
             </div>
             <div class="route-stat">
                 <span class="stat-icon">⏱️</span>
-                <span class="stat-text">Duration: ${(routeData.duration / 60).toFixed(1)} min</span>
+                <span class="stat-text">Duration: ${durationText}</span>
             </div>
             <div class="route-stat">
                 <span class="stat-icon">🚴</span>
-                <span class="stat-text">Avg Speed: ${(routeData.distance / 1000 / (routeData.duration / 60)).toFixed(1)} km/h</span>
+                <span class="stat-text">Avg Speed: ${speedText}</span>
             </div>
             <div class="route-stat">
                 <span class="stat-icon">🏔️</span>
-                <span class="stat-text">Elevation Gain: ${gain.toFixed(0)} m</span>
+                <span class="stat-text">Elevation Gain: ${gainText}</span>
             </div>
             <div class="route-stat">
                 <span class="stat-icon">📉</span>
-                <span class="stat-text">Elevation Loss: ${loss.toFixed(0)} m</span>
+                <span class="stat-text">Elevation Loss: ${lossText}</span>
             </div>
             <div class="route-stat">
                 <span class="stat-icon">⛰️</span>
-                <span class="stat-text">Peak Elevation: ${peak.toFixed(0)} m</span>
+                <span class="stat-text">Peak Elevation: ${peakText}</span>
+            </div>
+            <div class="route-stat">
+                <span class="stat-icon">🏞</span>
+                <span class="stat-text">Min Elevation: ${minText}</span>
             </div>
         `;
-    }
-    
-    showElevationUnavailable() {
-        const routeInfoDiv = document.getElementById('routeInfo');
-        if (!routeInfoDiv) return;
-        
-        const elevationStatsDiv = routeInfoDiv.querySelector('.elevation-stats');
-        if (elevationStatsDiv) {
-            const elevationStat = document.createElement('div');
-            elevationStat.className = 'route-stat';
-            elevationStat.innerHTML = `
-                <span class="stat-icon">🏔️</span>
-                <span class="stat-text">Elevation data unavailable</span>
-            `;
-            elevationStatsDiv.appendChild(elevationStat);
-        }
     }
     
     displayTurnDirections(steps) {
