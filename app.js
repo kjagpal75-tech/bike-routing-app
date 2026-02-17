@@ -1240,6 +1240,10 @@ class BikeRoutePlanner {
         const distance = this.convertDistance(routeData.distance);
         const duration = Math.round(routeData.duration / 60);
         
+        // Calculate speed in km/h first, then convert
+        const speedKmh = routeData.distance / 1000 / (routeData.duration / 60);
+        const speed = this.convertSpeed(speedKmh);
+        
         routeInfoDiv.innerHTML = `
             <div class="route-stats">
                 <div class="route-stat">
@@ -1252,7 +1256,7 @@ class BikeRoutePlanner {
                 </div>
                 <div class="route-stat">
                     <span class="stat-icon">🚴</span>
-                    <span class="stat-text">Avg Speed: ${this.convertSpeed(routeData.distance / 1000 / (routeData.duration / 60))}</span>
+                    <span class="stat-text">Avg Speed: ${speed}</span>
                 </div>
             </div>
         `;
@@ -1384,24 +1388,31 @@ class BikeRoutePlanner {
         if (!elevationDiv) return;
         
         elevationDiv.style.display = 'block';
+        
+        // Use unit conversions for elevation stats
+        const gainText = this.convertElevation(gain);
+        const lossText = this.convertElevation(loss);
+        const peakText = this.convertElevation(peak);
+        const minText = this.convertElevation(min);
+        
         elevationDiv.innerHTML = `
             <h3>🏔️ Elevation Profile</h3>
             <div class="elevation-stats">
                 <div class="elevation-stat">
                     <span class="stat-label">Elevation Gain:</span>
-                    <span class="stat-value">${gain.toFixed(0)} m</span>
+                    <span class="stat-value">${gainText}</span>
                 </div>
                 <div class="elevation-stat">
                     <span class="stat-label">Elevation Loss:</span>
-                    <span class="stat-value">${loss.toFixed(0)} m</span>
+                    <span class="stat-value">${lossText}</span>
                 </div>
                 <div class="elevation-stat">
                     <span class="stat-label">Peak Elevation:</span>
-                    <span class="stat-value">${peak.toFixed(0)} m</span>
+                    <span class="stat-value">${peakText}</span>
                 </div>
                 <div class="elevation-stat">
                     <span class="stat-label">Min Elevation:</span>
-                    <span class="stat-value">${min.toFixed(0)} m</span>
+                    <span class="stat-value">${minText}</span>
                 </div>
             </div>
             <div class="elevation-chart-container">
@@ -1420,16 +1431,93 @@ class BikeRoutePlanner {
                 // Clear canvas
                 ctx.clearRect(0, 0, width, height);
                 
-                // Draw elevation line
-                ctx.strokeStyle = '#FF6B35';
+                // Set up chart dimensions
+                const padding = 40;
+                const chartWidth = width - padding * 2;
+                const chartHeight = height - padding * 2;
+                
+                // Draw grid lines
+                ctx.strokeStyle = '#e0e0e0';
+                ctx.lineWidth = 1;
+                
+                // Horizontal grid lines
+                for (let i = 0; i <= 5; i++) {
+                    const y = padding + (chartHeight / 5) * i;
+                    ctx.beginPath();
+                    ctx.moveTo(padding, y);
+                    ctx.lineTo(width - padding, y);
+                    ctx.stroke();
+                }
+                
+                // Vertical grid lines
+                for (let i = 0; i <= 10; i++) {
+                    const x = padding + (chartWidth / 10) * i;
+                    ctx.beginPath();
+                    ctx.moveTo(x, padding);
+                    ctx.lineTo(x, height - padding);
+                    ctx.stroke();
+                }
+                
+                // Draw axes
+                ctx.strokeStyle = '#333';
                 ctx.lineWidth = 2;
                 ctx.beginPath();
+                ctx.moveTo(padding, padding);
+                ctx.lineTo(padding, height - padding);
+                ctx.lineTo(width - padding, height - padding);
+                ctx.stroke();
                 
-                const maxElevation = Math.max(...elevations);
-                const minElevation = Math.min(...elevations);
-                ctx.lineTo(0, height);
-                ctx.closePath();
-                ctx.fill();
+                // Calculate elevation range
+                const elevationRange = peak - min;
+                const distanceRange = distances[distances.length - 1];
+                
+                // Draw elevation profile
+                ctx.strokeStyle = '#FF6B35';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                
+                for (let i = 0; i < elevations.length; i++) {
+                    const x = padding + (distances[i] / distanceRange) * chartWidth;
+                    const y = padding + chartHeight - ((elevations[i] - min) / elevationRange) * chartHeight;
+                    
+                    if (i === 0) {
+                        ctx.moveTo(x, y);
+                    } else {
+                        ctx.lineTo(x, y);
+                    }
+                }
+                ctx.stroke();
+                
+                // Draw labels
+                ctx.fillStyle = '#333';
+                ctx.font = '12px Arial';
+                ctx.textAlign = 'center';
+                
+                // X-axis labels (distance)
+                const useImperial = document.getElementById('useImperialUnits');
+                const isImperial = useImperial ? useImperial.checked : false;
+                
+                for (let i = 0; i <= 5; i++) {
+                    const distance = (distanceRange / 5) * i;
+                    const x = padding + (chartWidth / 5) * i;
+                    const label = isImperial ? 
+                        (distance * 0.621371).toFixed(1) + ' mi' : 
+                        (distance / 1000).toFixed(1) + ' km';
+                    ctx.fillText(label, x, height - 20);
+                }
+                
+                // Y-axis labels (elevation)
+                ctx.textAlign = 'right';
+                for (let i = 0; i <= 5; i++) {
+                    const elevation = min + (elevationRange / 5) * i;
+                    const y = padding + chartHeight - (chartHeight / 5) * i;
+                    const label = isImperial ? 
+                        (elevation * 3.28084).toFixed(0) + ' ft' : 
+                        elevation.toFixed(0) + ' m';
+                    ctx.fillText(label, padding - 5, y + 4);
+                }
+                
+                console.log('🏔️ Elevation chart rendered with grid lines');
             }
         }, 100);
     }
