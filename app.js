@@ -555,10 +555,10 @@ class BikeRoutePlanner {
         let token = localStorage.getItem('graphhopperToken');
         
         if (!token) {
-            token = prompt('Enter your GraphHopper token (optional):');
-            if (token) {
-                localStorage.setItem('graphhopperToken', token);
-            }
+            // Set the provided API key
+            token = '5d3743e8-7e27-4718-a975-11d8b12ac3a9';
+            localStorage.setItem('graphhopperToken', token);
+            console.log('🗺️ GraphHopper API key set automatically');
         }
         
         return token;
@@ -1303,10 +1303,12 @@ class BikeRoutePlanner {
                 // GraphHopper Directions API
                 const graphhopperToken = this.getGraphhopperToken();
                 if (!graphhopperToken) {
-                    this.showNotification('GraphHopper token required. Please add your Graphhopper token in the settings.', 'error');
+                    this.showNotification('GraphHopper token required. Please add your GraphHopper token in the settings.', 'error');
                     return;
                 }
-                apiUrl = `https://graphhopper.com/route?point=${coordinates[0].lat},${coordinates[0].lng}&point=${coordinates[coordinates.length-1].lat},${coordinates[coordinates.length-1].lng}&vehicle=${routeType}&key=${graphhopperToken}&instructions=true&geometry=true`;
+                // Map route types to GraphHopper vehicle profiles
+                const vehicleProfile = routeType === 'drive' ? 'car' : routeType === 'cycling' ? 'bike' : 'foot';
+                apiUrl = `https://graphhopper.com/api/1/route?point=${coordinates[0].lat},${coordinates[0].lng}&point=${coordinates[coordinates.length-1].lat},${coordinates[coordinates.length-1].lng}&vehicle=${vehicleProfile}&key=${graphhopperToken}&instructions=true&geometry=true&points_encoded=false`;
             } else {
                 // OSRM API (default)
                 apiUrl = `https://router.project-osrm.org/route/v1/${routeType}/${coordsStr}?overview=full&geometries=geojson&steps=true`;
