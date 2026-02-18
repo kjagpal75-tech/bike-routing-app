@@ -1657,9 +1657,18 @@ class BikeRoutePlanner {
             
             // Extract street name from instruction if available
             const streetName = this.extractStreetName(instruction);
-            const displayInstruction = streetName ? 
-                `${streetName} - ${instruction.replace(streetName, '').trim()}` : 
-                instruction;
+            console.log(`📍 Street name extracted: "${streetName}"`);
+            
+            let displayInstruction;
+            if (streetName && streetName.trim().length > 0) {
+                // Remove the street name from instruction and format properly
+                const cleanInstruction = instruction.replace(streetName, '').replace(/\s+/g, ' ').trim();
+                displayInstruction = `${streetName.trim()} - ${cleanInstruction}`;
+                console.log(`📍 Display instruction: "${displayInstruction}"`);
+            } else {
+                displayInstruction = instruction;
+                console.log(`📍 No street name found, using original: "${instruction}"`);
+            }
             
             const stepDiv = document.createElement('div');
             stepDiv.className = 'turn-step';
