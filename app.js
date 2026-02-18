@@ -1349,6 +1349,14 @@ class BikeRoutePlanner {
                         return [lng, lat];
                     });
                     console.log(`🌍 ORS coordinates formatted as array:`, coordsArray);
+                    console.log(`🌍 ORS coordinate precision check:`, coordsArray.map(coord => ({
+                        lng: coord[0],
+                        lat: coord[1],
+                        lngType: typeof coord[0],
+                        latType: typeof coord[1],
+                        lngPrecision: coord[0].toString().length,
+                        latPrecision: coord[1].toString().length
+                    })));
                     
                     // Use POST method for multi-point routing
                     const requestBody = JSON.stringify({
@@ -1398,6 +1406,21 @@ class BikeRoutePlanner {
                 console.error(`❌ Error code:`, data.error.code);
                 console.error(`❌ Error message:`, data.error.message);
                 console.error(`❌ Request URL:`, apiUrl);
+                
+                // Handle specific ORS errors
+                if (data.error.code === 2010) {
+                    // Could not find routable point error
+                    console.warn(`⚠️ ORS cannot find routable point. Try placing waypoint on a major road.`);
+                    this.showNotification('OpenRouteService cannot find a road near the waypoint. Try placing the waypoint on a major road or use a different API.', 'warning');
+                } else if (data.error.code === 2001) {
+                    // Parameter missing error
+                    console.warn(`⚠️ ORS parameter error. This should be fixed now.`);
+                    this.showNotification('OpenRouteService parameter error. Please try again.', 'error');
+                } else {
+                    // Other ORS errors
+                    console.warn(`⚠️ ORS API error: ${data.error.message}`);
+                    this.showNotification(`OpenRouteService error: ${data.error.message}`, 'error');
+                }
             }
             
             if (routingApi === 'graphhopper') {
