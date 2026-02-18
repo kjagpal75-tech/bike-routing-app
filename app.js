@@ -1647,13 +1647,20 @@ class BikeRoutePlanner {
         
         directionsDiv.innerHTML = '<h3>🚴 Turn-by-Turn Directions</h3>';
         
+        console.log(`📍 Total steps: ${steps.length}`);
+        console.log(`📍 All steps data:`, steps);
+        
         steps.forEach((step, index) => {
             const instruction = step.maneuver.instruction || 'Continue';
             const distance = this.convertDistance(step.distance);
             const duration = Math.round(step.duration / 60);
             
-            // Debug: Log the actual instruction
-            console.log(`📍 Step ${index + 1}: "${instruction}"`);
+            // Debug: Log the actual instruction and step data
+            console.log(`📍 Step ${index + 1}:`);
+            console.log(`  Raw instruction: "${instruction}"`);
+            console.log(`  Full step data:`, step);
+            console.log(`  Maneuver type: ${step.maneuver?.type}`);
+            console.log(`  Modifier: ${step.maneuver?.modifier}`);
             
             // Extract street name from instruction if available
             const streetName = this.extractStreetName(instruction);
@@ -1721,8 +1728,11 @@ class BikeRoutePlanner {
         
         // Pattern 4: Look for capitalized words that might be street names
         const words = instruction.split(' ');
+        console.log(`🔍 Analyzing words: [${words.join(', ')}]`);
         for (let i = 0; i < words.length; i++) {
             const word = words[i];
+            console.log(`  Checking word "${word}": starts with capital? ${/^[A-Z][a-z]/.test(word)}, excluded? ${!/^(Turn|Head|Continue|Stay|Merge|Go|Keep|Sharp|right|left|north|south|east|west|straight|onto|on|the|and|or|at|in|for|of|to)$/i.test(word)}`);
+            
             // Check if word starts with capital and is not a direction/common word
             if (/^[A-Z][a-z]/.test(word) && 
                 !/^(Turn|Head|Continue|Stay|Merge|Go|Keep|Sharp|right|left|north|south|east|west|straight|onto|on|the|and|or|at|in|for|of|to)$/i.test(word)) {
