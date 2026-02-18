@@ -1702,15 +1702,12 @@ class BikeRoutePlanner {
             return streetName;
         }
         
-        // Pattern 3: Street name at the end (common in OSRM)
-        const pattern3 = instruction.match(/([A-Z][a-z0-9\s-]+)$/);
-        if (pattern3 && pattern3[1].length > 2) {
+        // Pattern 3: Street name at the end (common in OSRM) - be more specific
+        const pattern3 = instruction.match(/(?:onto|on) (?:the )?([A-Z][a-z0-9\s-]+)$/);
+        if (pattern3) {
             const streetName = pattern3[1].trim();
-            // Make sure it's not just a direction word
-            if (!/^(right|left|north|south|east|west|straight|ahead)$/i.test(streetName)) {
-                console.log(`✅ Found street name (pattern3): "${streetName}"`);
-                return streetName;
-            }
+            console.log(`✅ Found street name (pattern3): "${streetName}"`);
+            return streetName;
         }
         
         // Pattern 4: Look for capitalized words that might be street names
