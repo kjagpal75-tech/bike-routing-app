@@ -471,6 +471,15 @@ class BikeRoutePlanner {
             });
         }
         
+        // Route type selector
+        const routeTypeSelect = document.getElementById('routeType');
+        if (routeTypeSelect) {
+            routeTypeSelect.addEventListener('change', () => {
+                console.log('🔄 Route type changed to:', routeTypeSelect.value);
+                this.showNotification(`Route type changed to: ${this.getRouteTypeDescription(routeTypeSelect.value)}`, 'info');
+            });
+        }
+        
         // Return to start checkbox
         const returnToStartCheckbox = document.getElementById('returnToStart');
         if (returnToStartCheckbox) {
@@ -478,6 +487,15 @@ class BikeRoutePlanner {
                 this.handleReturnToStartToggle();
             });
         }
+    }
+    
+    getRouteTypeDescription(routeType) {
+        const descriptions = {
+            'drive': '🚗 Paved Roads Only (Recommended for road cycling)',
+            'cycling': '🚴 Cycling (May include trails and bike paths)',
+            'foot': '🚶 Walking (Pedestrian paths only)'
+        };
+        return descriptions[routeType] || routeType;
     }
     
     handleReturnToStartToggle() {
@@ -1165,6 +1183,14 @@ class BikeRoutePlanner {
             
             console.log(`🛣️ Using route type: ${routeType}`);
             console.log(`🔄 Return to start: ${returnToStart}`);
+            
+            // Provide information about route type
+            const routeTypeInfo = this.getRouteTypeDescription(routeType);
+            if (routeType === 'drive') {
+                console.log('🛣️ Using PAVED ROADS ONLY - Recommended for road cycling');
+            } else if (routeType === 'cycling') {
+                console.log('🚴 Using CYCLING profile - May include trails and bike paths');
+            }
             
             // Use selected profile for routing
             const coordsStr = coordinates.map(c => `${c.lng},${c.lat}`).join(';');
