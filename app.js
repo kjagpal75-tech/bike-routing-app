@@ -480,6 +480,20 @@ class BikeRoutePlanner {
             });
         }
         
+        // Routing API selector
+        const routingApiSelect = document.getElementById('routingApi');
+        if (routingApiSelect) {
+            routingApiSelect.addEventListener('change', () => {
+                const apiType = routingApiSelect.value;
+                const apiStatus = document.getElementById('apiStatus');
+                if (apiStatus) {
+                    apiStatus.textContent = apiType === 'google' ? '🗺️ Google Maps (API Key Required)' : '🆓 Using OSRM (Free)';
+                }
+                console.log('🔄 Routing API changed to:', apiType);
+                this.showNotification(`Routing API changed to: ${apiType === 'google' ? 'Google Maps' : 'OSRM'}`, 'info');
+            });
+        }
+        
         // Return to start checkbox
         const returnToStartCheckbox = document.getElementById('returnToStart');
         if (returnToStartCheckbox) {
@@ -487,6 +501,21 @@ class BikeRoutePlanner {
                 this.handleReturnToStartToggle();
             });
         }
+    }
+    
+    getGoogleApiKey() {
+        // In a real implementation, you would store this securely
+        // For demo purposes, we'll check localStorage or prompt the user
+        let apiKey = localStorage.getItem('googleMapsApiKey');
+        
+        if (!apiKey) {
+            apiKey = prompt('Enter your Google Maps API key (optional):');
+            if (apiKey) {
+                localStorage.setItem('googleMapsApiKey', apiKey);
+            }
+        }
+        
+        return apiKey;
     }
     
     getRouteTypeDescription(routeType) {
@@ -1177,11 +1206,15 @@ class BikeRoutePlanner {
         }
         
         try {
-            // Get selected route type
+            // Get selected route type and API
             const routeTypeSelect = document.getElementById('routeType');
             const routeType = routeTypeSelect ? routeTypeSelect.value : 'drive';
             
+            const routingApiSelect = document.getElementById('routingApi');
+            const routingApi = routingApiSelect ? routingApiSelect.value : 'osrm';
+            
             console.log(`🛣️ Using route type: ${routeType}`);
+            console.log(`🌐 Using routing API: ${routingApi}`);
             console.log(`🔄 Return to start: ${returnToStart}`);
             
             // Provide information about route type
@@ -1189,12 +1222,28 @@ class BikeRoutePlanner {
             if (routeType === 'drive') {
                 console.log('🛣️ Using ROAD profile - Paved roads only, recommended for road bikes');
             } else if (routeType === 'cycling') {
-                console.log('� Using MTB profile - Trails prioritized, optimized for mountain bikes');
+                console.log('🚵 Using MTB profile - Trails prioritized, optimized for mountain bikes');
             }
             
-            // Use selected profile for routing
+            // Use selected API and profile for routing
             const coordsStr = coordinates.map(c => `${c.lng},${c.lat}`).join(';');
-            const response = await fetch(`https://router.project-osrm.org/route/v1/${routeType}/${coordsStr}?overview=full&geometries=geojson&steps=true`);
+            let apiUrl;
+            
+            if (routingApi === 'google') {
+                // Google Maps Directions API
+                const googleApiKey = this.getGoogleApiKey();
+                if (!googleApiKey) {
+                    this.showNotification('Google Maps API key required. Please add your API key in the settings.', 'error');
+                    return;
+                }
+                apiUrl = `https://maps.googleapis.com/maps/api/directions/json?origin=${coordinates[0].lat},${coordinates[0].lng}&destination=${coordinates[coordinates.length-1].lat},${coordinates[coordinates.length-1].lng}&mode=${routeType}&key=${googleApiKey}`;
+            } else {
+                // OSRM API (default)
+                apiUrl = `https://router.project-osrm.org/route/v1/${routeType}/${coordsStr}?overview=full&geometries=geojson&steps=true`;
+            }
+            
+            console.log(`🌐 API URL: ${apiUrl}`);
+            const response = await fetch(apiUrl);
             
             const data = await response.json();
             
@@ -1650,10 +1699,28 @@ class BikeRoutePlanner {
         console.log(`📍 Total steps: ${steps.length}`);
         console.log(`📍 All steps data:`, steps);
         
-        steps.forEach((step, index) => {
-            const instruction = step.maneuver.instruction || 'Continue';
+        // Handle different API formats
+        let processedSteps;
+        const routingApi = document.getElementById('routingApi');
+        const apiType = routingApi ? routingApi.value : 'osrm';
+        
+        if (apiType === 'google') {
+            // Google Maps API format
+            processedSteps = steps[0].legs[0].steps.map((step, index) => ({
+                instruction: step.html_instructions,
+                distance: step.distance?.value || 0,
+                duration: step.duration?.value || 0,
+                maneuver: step.maneuver || {}
+            }));
+        } else {
+            // OSRM API format
+            processedSteps = steps;
+        }
+        
+        processedSteps.forEach((step, index) => {
+            const instruction = step.instruction || step.html_instructions || 'Continue';
             const distance = this.convertDistance(step.distance);
-            const duration = Math.round(step.duration / 60);
+            const duration = Math.round((step.duration || 0) / 60);
             
             // Debug: Log the actual instruction and step data
             console.log(`📍 Step ${index + 1}:`);

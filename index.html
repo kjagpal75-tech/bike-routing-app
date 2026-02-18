@@ -62,10 +62,23 @@
                         <div class="route-type-selector">
                             <label for="routeType">Route Type:</label>
                             <select id="routeType" class="route-type-select">
-                                <option value="drive">�️ Road (Paved Only)</option>
-                                <option value="cycling">� MTB (Trails Prioritized)</option>
+                                <option value="drive">🛣️ Road (Paved Only)</option>
+                                <option value="cycling">🚵 MTB (Trails Prioritized)</option>
                                 <option value="foot">🚶 Walking</option>
                             </select>
+                            <div class="route-type-info">
+                                <small>💡 Tip: MTB profile may provide more detailed street names</small>
+                            </div>
+                            <div class="api-selector">
+                                <label for="routingApi">Routing API:</label>
+                                <select id="routingApi" class="api-select">
+                                    <option value="osrm">🆓 OSRM (Free)</option>
+                                    <option value="google">🗺️ Google Maps (API Key Required)</option>
+                                </select>
+                                <div class="api-info">
+                                    <small id="apiStatus">🆓 Using OSRM (Free)</small>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     
