@@ -1335,20 +1335,26 @@ class BikeRoutePlanner {
                 
                 // Handle waypoints for OpenRouteService
                 if (coordinates.length > 2) {
-                    // Multiple waypoints - use coordinates parameter
+                    // Multiple waypoints - use POST method with coordinates in body
                     // OpenRouteService expects coordinates as [[lng1,lat1],[lng2,lat2],[lng3,lat3]]
-                    const coords = coordinates.map(coord => {
+                    const coordsArray = coordinates.map(coord => {
                         const lng = typeof coord.lng === 'number' ? coord.lng : parseFloat(coord.lng);
                         const lat = typeof coord.lat === 'number' ? coord.lat : parseFloat(coord.lat);
-                        return `[${lng},${lat}]`;
-                    }).join(',');
-                    console.log(`🌍 ORS coordinates formatted as array:`, coords);
+                        return [lng, lat];
+                    });
+                    console.log(`🌍 ORS coordinates formatted as array:`, coordsArray);
                     
-                    // Try the coordinates parameter with array format
-                    apiUrl = `https://api.openrouteservice.org/v2/directions/${orsProfile}?api_key=${orsKey}&coordinates=[${coords}]`;
+                    // Use POST method for multi-point routing
+                    const requestBody = JSON.stringify({
+                        coordinates: coordsArray
+                    });
                     
-                    // If coordinates fails, try alternative format
-                    console.log(`🌍 Trying alternative ORS format...`);
+                    // Try POST method first
+                    apiUrl = `https://api.openrouteservice.org/v2/directions/${orsProfile}?api_key=${orsKey}`;
+                    
+                    // Store request body for later use
+                    this.orsRequestBody = requestBody;
+                    console.log(`🌍 Trying ORS POST method with body:`, requestBody);
                 } else {
                     // Simple A-to-B routing
                     const startLng = typeof coordinates[0].lng === 'number' ? coordinates[0].lng : parseFloat(coordinates[0].lng);
@@ -1364,7 +1370,16 @@ class BikeRoutePlanner {
             }
             
             console.log(`🌐 API URL: ${apiUrl}`);
-            const response = await fetch(apiUrl);
+            const response = await fetch(apiUrl, {
+                method: this.orsRequestBody ? 'POST' : 'GET',
+                headers: this.orsRequestBody ? {
+                    'Content-Type': 'application/json'
+                } : {},
+                body: this.orsRequestBody || null
+            });
+            
+            // Clear request body after use
+            this.orsRequestBody = null;
             
             const data = await response.json();
             console.log(`🌐 API Response:`, data);
