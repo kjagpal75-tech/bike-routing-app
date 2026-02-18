@@ -1244,12 +1244,13 @@ class BikeRoutePlanner {
             this.endMarker.getLatLng()
         ];
         
+        // Get start and end coordinates for logging
+        const startLatLng = this.startMarker.getLatLng();
+        const endLatLng = this.endMarker.getLatLng();
+        
         // If return to start is checked, add start point again at the end
         // But only if the end point is different from the start point
         if (returnToStart) {
-            const startLatLng = this.startMarker.getLatLng();
-            const endLatLng = this.endMarker.getLatLng();
-            
             // Only add start point again if it's different from the end point
             if (startLatLng.lat !== endLatLng.lat || startLatLng.lng !== endLatLng.lng) {
                 coordinates.push(startLatLng);
