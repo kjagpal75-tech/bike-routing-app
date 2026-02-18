@@ -1245,9 +1245,22 @@ class BikeRoutePlanner {
         ];
         
         // If return to start is checked, add start point again at the end
+        // But only if the end point is different from the start point
         if (returnToStart) {
-            coordinates.push(this.startMarker.getLatLng());
+            const startLatLng = this.startMarker.getLatLng();
+            const endLatLng = this.endMarker.getLatLng();
+            
+            // Only add start point again if it's different from the end point
+            if (startLatLng.lat !== endLatLng.lat || startLatLng.lng !== endLatLng.lng) {
+                coordinates.push(startLatLng);
+            }
         }
+        
+        console.log(`📍 Generated coordinates:`, coordinates.map(c => `${c.lat},${c.lng}`));
+        console.log(`📍 Total coordinates: ${coordinates.length}`);
+        console.log(`📍 Return to start: ${returnToStart}`);
+        console.log(`📍 Start: ${startLatLng.lat},${startLatLng.lng}`);
+        console.log(`📍 End: ${endLatLng.lat},${endLatLng.lng}`);
         
         try {
             // Get selected route type and API
