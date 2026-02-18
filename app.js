@@ -1649,25 +1649,48 @@ class BikeRoutePlanner {
         
         steps.forEach((step, index) => {
             const instruction = step.maneuver.instruction || 'Continue';
-            const distance = (step.distance / 1000).toFixed(2);
+            const distance = this.convertDistance(step.distance);
             const duration = Math.round(step.duration / 60);
+            
+            // Extract street name from instruction if available
+            const streetName = this.extractStreetName(instruction);
+            const displayInstruction = streetName ? 
+                `${streetName} - ${instruction.replace(streetName, '').trim()}` : 
+                instruction;
             
             const stepDiv = document.createElement('div');
             stepDiv.className = 'turn-step';
             stepDiv.innerHTML = `
                 <div class="turn-step-header">
                     <span class="turn-step-number">${index + 1}</span>
-                    <span class="turn-step-distance">${distance} km</span>
+                    <span class="turn-step-distance">${distance}</span>
                 </div>
-                <div class="turn-instruction">${instruction}</div>
+                <div class="turn-instruction">${displayInstruction}</div>
                 <div class="turn-step-details">
                     <span class="turn-duration">⏱️ ${duration} min</span>
-                    <span class="turn-distance-detail">📏 ${(step.distance).toFixed(0)} m</span>
+                    <span class="turn-distance-detail">📏 ${this.convertDistance(step.distance)}</span>
                 </div>
             `;
             
             directionsDiv.appendChild(stepDiv);
         });
+    }
+    extractStreetName(instruction) {
+        // Try to extract street name from instruction
+        // Common patterns: "Turn right onto Main Street", "Continue on Oak Street", "Head north on Elm Street"
+        const streetPatterns = [
+            /(?:Turn|Head|Continue|Stay|Merge|Go straight) (?:right|left|north|south|east|west|onto|on) (?:the )?([A-Z][a-z]+(?:\s+(?:[A-Z][a-z]+))*)/g,
+            /(?:onto|on) ([A-Z][a-z]+(?:\s+(?:[A-Z][a-z]+))*)/g
+        ];
+        
+        for (const pattern of streetPatterns) {
+            const match = instruction.match(pattern);
+            if (match) {
+                return match[1] || match[2]; // Return the street name
+            }
+        }
+        
+        return null;
     }
     
     clearRoute() {
