@@ -1336,11 +1336,22 @@ class BikeRoutePlanner {
                 // Handle waypoints for OpenRouteService
                 if (coordinates.length > 2) {
                     // Multiple waypoints - use coordinates parameter
-                    const coords = coordinates.map(coord => `${coord.lng},${coord.lat}`).join('|');
+                    // Format coordinates as [lng1,lat1,lng2,lat2,...]
+                    const coords = coordinates.map(coord => {
+                        const lng = typeof coord.lng === 'number' ? coord.lng : parseFloat(coord.lng);
+                        const lat = typeof coord.lat === 'number' ? coord.lat : parseFloat(coord.lat);
+                        return `${lng},${lat}`;
+                    }).join('|');
+                    console.log(`🌍 ORS coordinates formatted:`, coords);
                     apiUrl = `https://api.openrouteservice.org/v2/directions/${orsProfile}?api_key=${orsKey}&coordinates=${coords}`;
                 } else {
                     // Simple A-to-B routing
-                    apiUrl = `https://api.openrouteservice.org/v2/directions/${orsProfile}?api_key=${orsKey}&start=${coordinates[0].lng},${coordinates[0].lat}&end=${coordinates[coordinates.length-1].lng},${coordinates[coordinates.length-1].lat}`;
+                    const startLng = typeof coordinates[0].lng === 'number' ? coordinates[0].lng : parseFloat(coordinates[0].lng);
+                    const startLat = typeof coordinates[0].lat === 'number' ? coordinates[0].lat : parseFloat(coordinates[0].lat);
+                    const endLng = typeof coordinates[coordinates.length-1].lng === 'number' ? coordinates[coordinates.length-1].lng : parseFloat(coordinates[coordinates.length-1].lng);
+                    const endLat = typeof coordinates[coordinates.length-1].lat === 'number' ? coordinates[coordinates.length-1].lat : parseFloat(coordinates[coordinates.length-1].lat);
+                    console.log(`🌍 ORS start/end formatted: start=${startLng},${startLat}, end=${endLng},${endLat}`);
+                    apiUrl = `https://api.openrouteservice.org/v2/directions/${orsProfile}?api_key=${orsKey}&start=${startLng},${startLat}&end=${endLng},${endLat}`;
                 }
             } else {
                 // OSRM API (default)
@@ -1358,6 +1369,9 @@ class BikeRoutePlanner {
             if (routingApi === 'openrouteservice' && data.error) {
                 console.error(`❌ OpenRouteService API Error:`, data.error);
                 console.error(`❌ Error details:`, data.info);
+                console.error(`❌ Error code:`, data.error.code);
+                console.error(`❌ Error message:`, data.error.message);
+                console.error(`❌ Request URL:`, apiUrl);
             }
             
             if (routingApi === 'graphhopper') {
