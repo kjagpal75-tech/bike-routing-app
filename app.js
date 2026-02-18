@@ -1262,6 +1262,7 @@ class BikeRoutePlanner {
         console.log(`📍 Return to start: ${returnToStart}`);
         console.log(`📍 Start: ${startLatLng.lat},${startLatLng.lng}`);
         console.log(`📍 End: ${endLatLng.lat},${endLatLng.lng}`);
+        console.log(`📍 Waypoints:`, this.waypoints.map(w => `${w.latlng.lat},${w.latlng.lng}`));
         
         try {
             // Get selected route type and API
@@ -1352,6 +1353,12 @@ class BikeRoutePlanner {
             const data = await response.json();
             console.log(`🌐 API Response:`, data);
             console.log(`🌐 Response keys:`, Object.keys(data));
+            
+            // Log specific error details for OpenRouteService
+            if (routingApi === 'openrouteservice' && data.error) {
+                console.error(`❌ OpenRouteService API Error:`, data.error);
+                console.error(`❌ Error details:`, data.info);
+            }
             
             if (routingApi === 'graphhopper') {
                 console.log(`🚶 GraphHopper response structure:`, {
