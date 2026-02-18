@@ -491,13 +491,12 @@ class BikeRoutePlanner {
                         'osrm': '🆓 Using OSRM (Free)',
                         'mapbox': '🗺️ Using Mapbox (Free Tier)',
                         'valhalla': '🛣️ Using Valhalla (Free)',
-                        'graphhopper': '🚶 Using GraphHopper (Free)',
-                        'google': '🗺️ Google Maps (API Key Required)'
+                        'graphhopper': '🚶 Using GraphHopper (Free)'
                     };
                     apiStatus.textContent = statusText[apiType] || '🆓 Using OSRM (Free)';
                 }
                 console.log(`🔄 Routing API changed to: ${apiType}`);
-                this.showNotification(`Routing API changed to: ${apiType === 'google' ? 'Google Maps' : apiType}`, 'info');
+                this.showNotification(`Routing API changed to: ${apiType}`, 'info');
             });
         }
         
@@ -508,21 +507,6 @@ class BikeRoutePlanner {
                 this.handleReturnToStartToggle();
             });
         }
-    }
-    
-    getGoogleApiKey() {
-        // In a real implementation, you would store this securely
-        // For demo purposes, we'll check localStorage or prompt the user
-        let apiKey = localStorage.getItem('googleMapsApiKey');
-        
-        if (!apiKey) {
-            apiKey = prompt('Enter your Google Maps API key (optional):');
-            if (apiKey) {
-                localStorage.setItem('googleMapsApiKey', apiKey);
-            }
-        }
-        
-        return apiKey;
     }
     
     getMapboxToken() {
@@ -1275,15 +1259,7 @@ class BikeRoutePlanner {
             const coordsStr = coordinates.map(c => `${c.lng},${c.lat}`).join(';');
             let apiUrl;
             
-            if (routingApi === 'google') {
-                // Google Maps Directions API
-                const googleApiKey = this.getGoogleApiKey();
-                if (!googleApiKey) {
-                    this.showNotification('Google Maps API key required. Please add your API key in the settings.', 'error');
-                    return;
-                }
-                apiUrl = `https://maps.googleapis.com/maps/api/directions/json?origin=${coordinates[0].lat},${coordinates[0].lng}&destination=${coordinates[coordinates.length-1].lat},${coordinates[coordinates.length-1].lng}&mode=${routeType}&key=${googleApiKey}`;
-            } else if (routingApi === 'mapbox') {
+            if (routingApi === 'mapbox') {
                 // Mapbox Directions API
                 const mapboxToken = this.getMapboxToken();
                 if (!mapboxToken) {
@@ -1776,15 +1752,7 @@ class BikeRoutePlanner {
         const routingApi = document.getElementById('routingApi');
         const apiType = routingApi ? routingApi.value : 'osrm';
         
-        if (apiType === 'google') {
-            // Google Maps API format
-            processedSteps = steps[0].legs[0].steps.map((step, index) => ({
-                instruction: step.html_instructions,
-                distance: step.distance?.value || 0,
-                duration: step.duration?.value || 0,
-                maneuver: step.maneuver || {}
-            }));
-        } else if (apiType === 'mapbox') {
+        if (apiType === 'mapbox') {
             // Mapbox API format
             processedSteps = steps.legs[0].steps.map((step, index) => ({
                 instruction: step.maneuver.instruction || 'Continue',
