@@ -1308,8 +1308,16 @@ class BikeRoutePlanner {
                 }
                 // Map route types to ORS profiles
                 const orsProfile = routeType === 'drive' ? 'driving-car' : routeType === 'cycling' ? 'cycling-regular' : 'foot-walking';
-                const coords = coordinates.map(coord => `${coord[1]},${coord[0]}`).join('|');
-                apiUrl = `https://api.openrouteservice.org/v2/directions/${orsProfile}?api_key=${orsKey}&start=${coordinates[0].lng},${coordinates[0].lat}&end=${coordinates[coordinates.length-1].lng},${coordinates[coordinates.length-1].lat}`;
+                
+                // Handle return-to-start case
+                if (returnToStart && coordinates.length >= 2) {
+                    // For return-to-start, use the full coordinate list
+                    const coords = coordinates.map(coord => `${coord.lng},${coord.lat}`).join('|');
+                    apiUrl = `https://api.openrouteservice.org/v2/directions/${orsProfile}?api_key=${orsKey}&coordinates=${coords}`;
+                } else {
+                    // For simple A-to-B routing, use start and end parameters
+                    apiUrl = `https://api.openrouteservice.org/v2/directions/${orsProfile}?api_key=${orsKey}&start=${coordinates[0].lng},${coordinates[0].lat}&end=${coordinates[coordinates.length-1].lng},${coordinates[coordinates.length-1].lat}`;
+                }
             } else {
                 // OSRM API (default)
                 apiUrl = `https://router.project-osrm.org/route/v1/${routeType}/${coordsStr}?overview=full&geometries=geojson&steps=true`;
