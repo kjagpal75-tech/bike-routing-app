@@ -1652,6 +1652,9 @@ class BikeRoutePlanner {
             const distance = this.convertDistance(step.distance);
             const duration = Math.round(step.duration / 60);
             
+            // Debug: Log the actual instruction
+            console.log(`📍 Step ${index + 1}: "${instruction}"`);
+            
             // Extract street name from instruction if available
             const streetName = this.extractStreetName(instruction);
             const displayInstruction = streetName ? 
@@ -1677,19 +1680,61 @@ class BikeRoutePlanner {
     }
     extractStreetName(instruction) {
         // Try to extract street name from instruction
-        // Common patterns: "Turn right onto Main Street", "Continue on Oak Street", "Head north on Elm Street"
-        const streetPatterns = [
-            /(?:Turn|Head|Continue|Stay|Merge|Go straight) (?:right|left|north|south|east|west|onto|on) (?:the )?([A-Z][a-z]+(?:\s+(?:[A-Z][a-z]+))*)/g,
-            /(?:onto|on) ([A-Z][a-z]+(?:\s+(?:[A-Z][a-z]+))*)/g
-        ];
+        // OSRM instruction patterns to handle:
+        // "Turn right onto Main Street", "Continue on Oak Street", "Head north on Elm Street"
+        // "Turn left", "Continue", "Keep right", "Keep left", "Sharp right", "Sharp left"
         
-        for (const pattern of streetPatterns) {
-            const match = instruction.match(pattern);
-            if (match) {
-                return match[1] || match[2]; // Return the street name
+        console.log(`🔍 Extracting street name from: "${instruction}"`);
+        
+        // Pattern 1: Turn/Head/Continue + direction + onto/on + street name
+        const pattern1 = instruction.match(/(?:Turn|Head|Continue|Stay|Merge|Go straight|Keep|Sharp) (?:right|left|north|south|east|west|straight) (?:onto|on) (?:the )?([A-Z][a-z0-9\s-]+)/i);
+        if (pattern1) {
+            const streetName = pattern1[1].trim();
+            console.log(`✅ Found street name (pattern1): "${streetName}"`);
+            return streetName;
+        }
+        
+        // Pattern 2: Simple onto/on + street name
+        const pattern2 = instruction.match(/(?:onto|on) (?:the )?([A-Z][a-z0-9\s-]+)/i);
+        if (pattern2) {
+            const streetName = pattern2[1].trim();
+            console.log(`✅ Found street name (pattern2): "${streetName}"`);
+            return streetName;
+        }
+        
+        // Pattern 3: Street name at the end (common in OSRM)
+        const pattern3 = instruction.match(/([A-Z][a-z0-9\s-]+)$/);
+        if (pattern3 && pattern3[1].length > 2) {
+            const streetName = pattern3[1].trim();
+            // Make sure it's not just a direction word
+            if (!/^(right|left|north|south|east|west|straight|ahead)$/i.test(streetName)) {
+                console.log(`✅ Found street name (pattern3): "${streetName}"`);
+                return streetName;
             }
         }
         
+        // Pattern 4: Look for capitalized words that might be street names
+        const words = instruction.split(' ');
+        for (let i = 0; i < words.length; i++) {
+            const word = words[i];
+            // Check if word starts with capital and is not a direction/common word
+            if (/^[A-Z][a-z]/.test(word) && 
+                !/^(Turn|Head|Continue|Stay|Merge|Go|Keep|Sharp|right|left|north|south|east|west|straight|onto|on|the|and|or|at|in|for|of|to)$/i.test(word)) {
+                // Look ahead for more capitalized words
+                let streetName = word;
+                let j = i + 1;
+                while (j < words.length && /^[A-Z][a-z]/.test(words[j])) {
+                    streetName += ' ' + words[j];
+                    j++;
+                }
+                if (streetName.length > 3) {
+                    console.log(`✅ Found street name (pattern4): "${streetName}"`);
+                    return streetName;
+                }
+            }
+        }
+        
+        console.log(`❌ No street name found in: "${instruction}"`);
         return null;
     }
     
