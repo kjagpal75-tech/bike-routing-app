@@ -562,6 +562,36 @@ class BikeRoutePlanner {
         return token;
     }
     
+    adjustWaypointForORS(coordsArray) {
+        // Try to adjust waypoint coordinates to find a nearby routable point
+        // This is a simple implementation that tries small adjustments
+        const adjustedCoords = [...coordsArray];
+        
+        for (let i = 1; i < adjustedCoords.length - 1; i++) {
+            const [lng, lat] = adjustedCoords[i];
+            
+            // Try small adjustments in different directions
+            const adjustments = [
+                [lng + 0.0001, lat],      // East
+                [lng - 0.0001, lat],      // West
+                [lng, lat + 0.0001],      // North
+                [lng, lat - 0.0001],      // South
+                [lng + 0.0001, lat + 0.0001], // Northeast
+                [lng - 0.0001, lat + 0.0001], // Northwest
+                [lng + 0.0001, lat - 0.0001], // Southeast
+                [lng - 0.0001, lat - 0.0001], // Southwest
+            ];
+            
+            for (const [adjLng, adjLat] of adjustments) {
+                adjustedCoords[i] = [adjLng, adjLat];
+                console.log(`🔄 Trying adjusted waypoint ${i}: [${adjLng}, ${adjLat}]`);
+                return adjustedCoords;
+            }
+        }
+        
+        return null;
+    }
+    
     getRouteTypeDescription(routeType) {
         const descriptions = {
             'drive': '�️ Road (Paved Only) - Recommended for road bikes and racing bikes',
@@ -1410,13 +1440,50 @@ class BikeRoutePlanner {
                 // Handle specific ORS errors
                 if (data.error.code === 2010) {
                     // Could not find routable point error
-                    console.warn(`⚠️ ORS cannot find routable point. Try placing waypoint on a major road.`);
-                    this.showNotification('OpenRouteService cannot find a road near the waypoint. Try placing the waypoint on a major road or use a different API.', 'warning');
+                    console.warn(`⚠️ ORS cannot find routable point. Trying to snap waypoint to nearest road...`);
+                    
+                    // Try to find a nearby routable point by adjusting coordinates slightly
+                    const adjustedCoords = this.adjustWaypointForORS(coordsArray);
+                    if (adjustedCoords) {
+                        console.log(`🔄 Retrying ORS with adjusted coordinates:`, adjustedCoords);
+                        
+                        // Retry with adjusted coordinates
+                        const retryRequestBody = JSON.stringify({
+                            coordinates: adjustedCoords
+                        });
+                        
+                        try {
+                            const retryResponse = await fetch(apiUrl, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: retryRequestBody
+                            });
+                            
+                            const retryData = await retryResponse.json();
+                            console.log(`🌐 ORS Retry Response:`, retryData);
+                            
+                            if (!retryData.error) {
+                                // Success! Use the retried data
+                                data = retryData;
+                                console.log(`✅ ORS retry successful with adjusted coordinates`);
+                            } else {
+                                // Retry failed
+                                console.warn(`⚠️ ORS retry also failed`);
+                                this.showNotification('OpenRouteService cannot find a road near the waypoint. Try placing the waypoint on a major road or use a different API.', 'warning');
+                            }
+                        } catch (retryError) {
+                            console.error(`❌ ORS retry error:`, retryError);
+                            this.showNotification('OpenRouteService cannot find a road near the waypoint. Try placing the waypoint on a major road or use a different API.', 'warning');
+                        }
+                    } else {
+                        this.showNotification('OpenRouteService cannot find a road near the waypoint. Try placing the waypoint on a major road or use a different API.', 'warning');
+                    }
                 } else if (data.error.code === 2001) {
                     // Parameter missing error
                     console.warn(`⚠️ ORS parameter error. This should be fixed now.`);
                     this.showNotification('OpenRouteService parameter error. Please try again.', 'error');
                 } else {
+                    console.error(`❌ ORS API error: ${data.error.message}`);
                     // Other ORS errors
                     console.warn(`⚠️ ORS API error: ${data.error.message}`);
                     this.showNotification(`OpenRouteService error: ${data.error.message}`, 'error');
