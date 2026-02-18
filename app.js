@@ -1263,6 +1263,12 @@ class BikeRoutePlanner {
         console.log(`📍 Start: ${startLatLng.lat},${startLatLng.lng}`);
         console.log(`📍 End: ${endLatLng.lat},${endLatLng.lng}`);
         console.log(`📍 Waypoints:`, this.waypoints.map(w => `${w.latlng.lat},${w.latlng.lng}`));
+        console.log(`📍 Waypoint precision check:`, this.waypoints.map(w => ({
+            lat: w.latlng.lat,
+            lng: w.latlng.lng,
+            latType: typeof w.latlng.lat,
+            lngType: typeof w.latlng.lng
+        })));
         
         try {
             // Get selected route type and API
