@@ -1313,7 +1313,6 @@ class BikeRoutePlanner {
                 const vehicleProfile = routeType === 'drive' ? 'car' : routeType === 'cycling' ? 'bike' : 'foot';
                 
                 // Handle waypoints for GraphHopper
-                let apiUrl;
                 if (coordinates.length > 2) {
                     // Multiple waypoints
                     const points = coordinates.map(coord => `${coord.lat},${coord.lng}`).join('&point=');
@@ -1333,7 +1332,6 @@ class BikeRoutePlanner {
                 const orsProfile = routeType === 'drive' ? 'driving-car' : routeType === 'cycling' ? 'cycling-regular' : 'foot-walking';
                 
                 // Handle waypoints for OpenRouteService
-                let apiUrl;
                 if (coordinates.length > 2) {
                     // Multiple waypoints - use coordinates parameter
                     const coords = coordinates.map(coord => `${coord.lng},${coord.lat}`).join('|');
