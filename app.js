@@ -487,10 +487,17 @@ class BikeRoutePlanner {
                 const apiType = routingApiSelect.value;
                 const apiStatus = document.getElementById('apiStatus');
                 if (apiStatus) {
-                    apiStatus.textContent = apiType === 'google' ? '🗺️ Google Maps (API Key Required)' : '🆓 Using OSRM (Free)';
+                    const statusText = {
+                        'osrm': '🆓 Using OSRM (Free)',
+                        'mapbox': '🗺️ Using Mapbox (Free Tier)',
+                        'valhalla': '🛣️ Using Valhalla (Free)',
+                        'graphhopper': '🚶 Using GraphHopper (Free)',
+                        'google': '🗺️ Google Maps (API Key Required)'
+                    };
+                    apiStatus.textContent = statusText[apiType] || '🆓 Using OSRM (Free)';
                 }
-                console.log('🔄 Routing API changed to:', apiType);
-                this.showNotification(`Routing API changed to: ${apiType === 'google' ? 'Google Maps' : 'OSRM'}`, 'info');
+                console.log(`🔄 Routing API changed to: ${apiType}`);
+                this.showNotification(`Routing API changed to: ${apiType === 'google' ? 'Google Maps' : apiType}`, 'info');
             });
         }
         
@@ -516,6 +523,45 @@ class BikeRoutePlanner {
         }
         
         return apiKey;
+    }
+    
+    getMapboxToken() {
+        let token = localStorage.getItem('mapboxToken');
+        
+        if (!token) {
+            token = prompt('Enter your Mapbox token (optional):');
+            if (token) {
+                localStorage.setItem('mapboxToken', token);
+            }
+        }
+        
+        return token;
+    }
+    
+    getValhallaToken() {
+        let token = localStorage.getItem('valhallaToken');
+        
+        if (!token) {
+            token = prompt('Enter your Valhalla token (optional):');
+            if (token) {
+                localStorage.setItem('valhallaToken', token);
+            }
+        }
+        
+        return token;
+    }
+    
+    getGraphhopperToken() {
+        let token = localStorage.getItem('graphhopperToken');
+        
+        if (!token) {
+            token = prompt('Enter your GraphHopper token (optional):');
+            if (token) {
+                localStorage.setItem('graphhopperToken', token);
+            }
+        }
+        
+        return token;
     }
     
     getRouteTypeDescription(routeType) {
@@ -1237,6 +1283,30 @@ class BikeRoutePlanner {
                     return;
                 }
                 apiUrl = `https://maps.googleapis.com/maps/api/directions/json?origin=${coordinates[0].lat},${coordinates[0].lng}&destination=${coordinates[coordinates.length-1].lat},${coordinates[coordinates.length-1].lng}&mode=${routeType}&key=${googleApiKey}`;
+            } else if (routingApi === 'mapbox') {
+                // Mapbox Directions API
+                const mapboxToken = this.getMapboxToken();
+                if (!mapboxToken) {
+                    this.showNotification('Mapbox token required. Please add your Mapbox token in the settings.', 'error');
+                    return;
+                }
+                apiUrl = `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${routeType}/${coordsStr}?access_token=${mapboxToken}&geometries=geojson&steps=true&overview=full`;
+            } else if (routingApi === 'valhalla') {
+                // Valhalla Directions API
+                const valhallaToken = this.getValhallaToken();
+                if (!valhallaToken) {
+                    this.showNotification('Valhalla token required. Please add your Valhalla token in the token in the settings.', 'error');
+                    return;
+                }
+                apiUrl = `https://router.valhalla.com/route/${routeType}/${coordsStr}?access_token=${valhallaToken}&geometries=geojson&steps=true`;
+            } else if (routingApi === 'graphhopper') {
+                // GraphHopper Directions API
+                const graphhopperToken = this.getGraphhopperToken();
+                if (!graphhopperToken) {
+                    this.showNotification('GraphHopper token required. Please add your Graphhopper token in the settings.', 'error');
+                    return;
+                }
+                apiUrl = `https://graphhopper.com/route?point=${coordinates[0].lat},${coordinates[0].lng}&point=${coordinates[coordinates.length-1].lat},${coordinates[coordinates.length-1].lng}&vehicle=${routeType}&key=${graphhopperToken}&instructions=true&geometry=true`;
             } else {
                 // OSRM API (default)
                 apiUrl = `https://router.project-osrm.org/route/v1/${routeType}/${coordsStr}?overview=full&geometries=geojson&steps=true`;
@@ -1710,6 +1780,30 @@ class BikeRoutePlanner {
                 instruction: step.html_instructions,
                 distance: step.distance?.value || 0,
                 duration: step.duration?.value || 0,
+                maneuver: step.maneuver || {}
+            }));
+        } else if (apiType === 'mapbox') {
+            // Mapbox API format
+            processedSteps = steps.legs[0].steps.map((step, index) => ({
+                instruction: step.maneuver.instruction || 'Continue',
+                distance: step.distance || 0,
+                duration: step.duration || 0,
+                maneuver: step.maneuver || {}
+            }));
+        } else if (apiType === 'valhalla') {
+            // Valhalla API format
+            processedSteps = steps.legs[0].steps.map((step, index) => ({
+                instruction: step.maneuver.instruction || 'Continue',
+                distance: step.distance || 0,
+                duration: step.duration || 0,
+                maneuver: step.maneuver || {}
+            }));
+        } else if (apiType === 'graphhopper') {
+            // GraphHopper API format
+            processedSteps = steps.paths[0].instructions.map((step, index) => ({
+                instruction: step.text || 'Continue',
+                distance: step.distance || 0,
+                duration: step.time || 0,
                 maneuver: step.maneuver || {}
             }));
         } else {
