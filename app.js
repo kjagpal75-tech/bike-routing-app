@@ -491,7 +491,8 @@ class BikeRoutePlanner {
                         'osrm': '🆓 Using OSRM (Free)',
                         'mapbox': '🗺️ Using Mapbox (Free Tier)',
                         'valhalla': '🛣️ Using Valhalla (Free)',
-                        'graphhopper': '🚶 Using GraphHopper (Free)'
+                        'graphhopper': '🚶 Using GraphHopper (Free)',
+                        'openrouteservice': '🌍 Using OpenRouteService (Free)'
                     };
                     apiStatus.textContent = statusText[apiType] || '🆓 Using OSRM (Free)';
                 }
@@ -507,6 +508,19 @@ class BikeRoutePlanner {
                 this.handleReturnToStartToggle();
             });
         }
+    }
+    
+    getOpenRouteServiceKey() {
+        let key = localStorage.getItem('openRouteServiceKey');
+        
+        if (!key) {
+            // Set the provided API key
+            key = 'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjY0M2M3OTYwYjczODRiMmI4Y2QzNzA0YTQ2N2QwYWNkIiwiaCI6Im11cm11cjY0In0=';
+            localStorage.setItem('openRouteServiceKey', key);
+            console.log('🌍 OpenRouteService API key set automatically');
+        }
+        
+        return key;
     }
     
     getMapboxToken() {
@@ -1285,6 +1299,17 @@ class BikeRoutePlanner {
                 // Map route types to GraphHopper vehicle profiles
                 const vehicleProfile = routeType === 'drive' ? 'car' : routeType === 'cycling' ? 'bike' : 'foot';
                 apiUrl = `https://graphhopper.com/api/1/route?point=${coordinates[0].lat},${coordinates[0].lng}&point=${coordinates[coordinates.length-1].lat},${coordinates[coordinates.length-1].lng}&vehicle=${vehicleProfile}&key=${graphhopperToken}&instructions=true&geometry=true&points_encoded=false`;
+            } else if (routingApi === 'openrouteservice') {
+                // OpenRouteService Directions API
+                const orsKey = this.getOpenRouteServiceKey();
+                if (!orsKey) {
+                    this.showNotification('OpenRouteService key required. Please add your OpenRouteService key in the settings.', 'error');
+                    return;
+                }
+                // Map route types to ORS profiles
+                const orsProfile = routeType === 'drive' ? 'driving-car' : routeType === 'cycling' ? 'cycling-regular' : 'foot-walking';
+                const coords = coordinates.map(coord => `${coord[1]},${coord[0]}`).join('|');
+                apiUrl = `https://api.openrouteservice.org/v2/directions/${orsProfile}?api_key=${orsKey}&start=${coordinates[0].lng},${coordinates[0].lat}&end=${coordinates[coordinates.length-1].lng},${coordinates[coordinates.length-1].lat}`;
             } else {
                 // OSRM API (default)
                 apiUrl = `https://router.project-osrm.org/route/v1/${routeType}/${coordsStr}?overview=full&geometries=geojson&steps=true`;
@@ -1774,6 +1799,14 @@ class BikeRoutePlanner {
                 instruction: step.text || 'Continue',
                 distance: step.distance || 0,
                 duration: step.time || 0,
+                maneuver: step.maneuver || {}
+            }));
+        } else if (apiType === 'openrouteservice') {
+            // OpenRouteService API format
+            processedSteps = steps.features[0].properties.segments.map((step, index) => ({
+                instruction: step.instruction || 'Continue',
+                distance: step.distance || 0,
+                duration: step.duration || 0,
                 maneuver: step.maneuver || {}
             }));
         } else {
