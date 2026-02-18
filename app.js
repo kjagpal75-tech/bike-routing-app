@@ -1673,8 +1673,12 @@ class BikeRoutePlanner {
                 displayInstruction = `${streetName.trim()} - ${cleanInstruction}`;
                 console.log(`📍 Display instruction: "${displayInstruction}"`);
             } else {
-                displayInstruction = instruction;
-                console.log(`📍 No street name found, using original: "${instruction}"`);
+                // Fallback: Show route type when no street name found
+                const routeTypeSelect = document.getElementById('routeType');
+                const routeType = routeTypeSelect ? routeTypeSelect.value : 'drive';
+                const routeTypeDescription = routeType === 'drive' ? 'Road' : routeType === 'cycling' ? 'MTB Trail' : 'Walking Path';
+                displayInstruction = `${routeTypeDescription} - ${instruction}`;
+                console.log(`📍 No street name found, using route type fallback: "${displayInstruction}"`);
             }
             
             const stepDiv = document.createElement('div');
