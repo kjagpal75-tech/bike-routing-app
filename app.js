@@ -31,7 +31,7 @@ class BikeRoutePlanner {
         const useImperial = document.getElementById('useImperialUnits');
         const isImperial = useImperial ? useImperial.checked : false;
         
-        console.log('🔄 convertDistance called with:', meters, 'meters');
+        console.log('🔄 convertDistance called with:', meters, 'meters, imperial:', isImperial);
         
         // OSRM API returns distance in meters
         // Convert meters to kilometers first
@@ -52,8 +52,11 @@ class BikeRoutePlanner {
         const useImperial = document.getElementById('useImperialUnits');
         const isImperial = useImperial ? useImperial.checked : false;
         
+        console.log('🔄 convertElevation called with:', meters, 'meters, imperial:', isImperial);
+        
         if (isImperial) {
             const feet = meters * 3.28084;
+            console.log('🔄 Meters to feet:', feet);
             return feet.toFixed(0) + ' feet';
         } else {
             return meters.toFixed(0) + ' m';
@@ -64,8 +67,11 @@ class BikeRoutePlanner {
         const useImperial = document.getElementById('useImperialUnits');
         const isImperial = useImperial ? useImperial.checked : false;
         
+        console.log('🔄 convertSpeed called with:', kmh, 'km/h, imperial:', isImperial);
+        
         if (isImperial) {
             const mph = kmh * 0.621371;
+            console.log('🔄 km/h to mph:', mph);
             return mph.toFixed(1) + ' mph';
         } else {
             return kmh.toFixed(1) + ' km/h';
