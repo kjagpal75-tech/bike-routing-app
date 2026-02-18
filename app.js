@@ -491,9 +491,9 @@ class BikeRoutePlanner {
     
     getRouteTypeDescription(routeType) {
         const descriptions = {
-            'drive': '🚗 Paved Roads Only (Recommended for road cycling)',
-            'cycling': '🚴 Cycling (May include trails and bike paths)',
-            'foot': '🚶 Walking (Pedestrian paths only)'
+            'drive': '�️ Road (Paved Only) - Recommended for road bikes and racing bikes',
+            'cycling': '� MTB (Trails Prioritized) - Optimized for mountain bikes and trails',
+            'foot': '🚶 Walking - Pedestrian paths and sidewalks only'
         };
         return descriptions[routeType] || routeType;
     }
@@ -1187,9 +1187,9 @@ class BikeRoutePlanner {
             // Provide information about route type
             const routeTypeInfo = this.getRouteTypeDescription(routeType);
             if (routeType === 'drive') {
-                console.log('🛣️ Using PAVED ROADS ONLY - Recommended for road cycling');
+                console.log('🛣️ Using ROAD profile - Paved roads only, recommended for road bikes');
             } else if (routeType === 'cycling') {
-                console.log('🚴 Using CYCLING profile - May include trails and bike paths');
+                console.log('� Using MTB profile - Trails prioritized, optimized for mountain bikes');
             }
             
             // Use selected profile for routing
@@ -1241,7 +1241,7 @@ class BikeRoutePlanner {
             routeColor = '#4CAF50'; // Green for road cycling
             routeWeight = 6;
         } else if (routeType === 'cycling') {
-            routeColor = '#FF6B35'; // Orange for mixed trails
+            routeColor = '#FF6B35'; // Orange for MTB/trails
             routeWeight = 5;
         } else if (routeType === 'foot') {
             routeColor = '#2196F3'; // Blue for walking
