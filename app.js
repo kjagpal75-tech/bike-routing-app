@@ -1523,11 +1523,11 @@ class BikeRoutePlanner {
                 const isImperial = useImperial ? useImperial.checked : false;
                 
                 for (let i = 0; i <= 5; i++) {
-                    const distance = (distanceRange / 5) * i;
+                    const distance = (distanceRange / 5) * i; // distance in meters
                     const x = padding + (chartWidth / 5) * i;
                     const label = isImperial ? 
-                        (distance * 0.621371).toFixed(1) + ' mi' : 
-                        (distance / 1000).toFixed(1) + ' km';
+                        (distance * 0.621371 / 1000).toFixed(1) + ' mi' : // meters → miles
+                        (distance / 1000).toFixed(1) + ' km'; // meters → km
                     ctx.fillText(label, x, height - 20);
                 }
                 
