@@ -1319,11 +1319,135 @@ class BikeRoutePlanner {
             const response = await fetch(apiUrl);
             
             const data = await response.json();
+            console.log(`🌐 API Response:`, data);
+            console.log(`🌐 Response keys:`, Object.keys(data));
             
-            if (data.routes && data.routes.length > 0) {
-                const route = data.routes[0];
-                const routePoints = route.geometry.coordinates.map(coord => L.latLng(coord[1], coord[0]));
+            if (routingApi === 'graphhopper') {
+                console.log(`🚶 GraphHopper response structure:`, {
+                    paths: data.paths,
+                    pathsLength: data.paths?.length,
+                    firstPath: data.paths?.[0],
+                    instructions: data.paths?.[0]?.instructions,
+                    geometry: data.paths?.[0]?.geometry
+                });
+            } else if (routingApi === 'openrouteservice') {
+                console.log(`🌍 OpenRouteService response structure:`, {
+                    features: data.features,
+                    featuresLength: data.features?.length,
+                    firstFeature: data.features?.[0],
+                    properties: data.features?.[0]?.properties,
+                    geometry: data.features?.[0]?.geometry
+                });
+            } else if (routingApi === 'mapbox') {
+                console.log(`🗺️ Mapbox response structure:`, {
+                    routes: data.routes,
+                    routesLength: data.routes?.length,
+                    firstRoute: data.routes?.[0],
+                    legs: data.routes?.[0]?.legs,
+                    steps: data.routes?.[0]?.legs?.[0]?.steps
+                });
+            } else if (routingApi === 'valhalla') {
+                console.log(`🛣️ Valhalla response structure:`, {
+                    routes: data.routes,
+                    routesLength: data.routes?.length,
+                    firstRoute: data.routes?.[0],
+                    legs: data.routes?.[0]?.legs,
+                    steps: data.routes?.[0]?.legs?.[0]?.steps
+                });
+            } else {
+                console.log(`🆓 OSRM response structure:`, {
+                    routes: data.routes,
+                    routesLength: data.routes?.length,
+                    firstRoute: data.routes?.[0],
+                    geometry: data.routes?.[0]?.geometry,
+                    legs: data.routes?.[0]?.legs,
+                    steps: data.routes?.[0]?.legs?.[0]?.steps
+                });
+            }
+            
+            // Handle different API response structures
+            let route, routePoints;
+            let routeFound = false;
+            
+            if (routingApi === 'graphhopper') {
+                // GraphHopper format
+                if (!data.paths || data.paths.length === 0) {
+                    console.error('❌ No paths found in GraphHopper response');
+                    this.showNotification('No route found with GraphHopper API', 'error');
+                    routeFound = false;
+                } else {
+                    const path = data.paths[0];
+                    route = {
+                        distance: path.distance,
+                        duration: path.time,
+                        geometry: path.geometry,
+                        legs: [{ steps: path.instructions }]
+                    };
+                    routePoints = path.geometry.coordinates.map(coord => L.latLng(coord[1], coord[0]));
+                    routeFound = true;
+                    console.log('🚶 GraphHopper route data extracted:', route);
+                }
                 
+            } else if (routingApi === 'openrouteservice') {
+                // OpenRouteService format
+                if (!data.features || data.features.length === 0) {
+                    console.error('❌ No features found in OpenRouteService response');
+                    this.showNotification('No route found with OpenRouteService API', 'error');
+                    routeFound = false;
+                } else {
+                    const feature = data.features[0];
+                    route = {
+                        distance: feature.properties.segments.reduce((sum, seg) => sum + seg.distance, 0),
+                        duration: feature.properties.segments.reduce((sum, seg) => sum + seg.duration, 0),
+                        geometry: feature.geometry,
+                        legs: [{ steps: feature.properties.segments }]
+                    };
+                    routePoints = feature.geometry.coordinates.map(coord => L.latLng(coord[1], coord[0]));
+                    routeFound = true;
+                    console.log('🌍 OpenRouteService route data extracted:', route);
+                }
+                
+            } else if (routingApi === 'mapbox') {
+                // Mapbox format
+                if (!data.routes || data.routes.length === 0) {
+                    console.error('❌ No routes found in Mapbox response');
+                    this.showNotification('No route found with Mapbox API', 'error');
+                    routeFound = false;
+                } else {
+                    route = data.routes[0];
+                    routePoints = route.geometry.coordinates.map(coord => L.latLng(coord[1], coord[0]));
+                    routeFound = true;
+                    console.log('🗺️ Mapbox route data extracted:', route);
+                }
+                
+            } else if (routingApi === 'valhalla') {
+                // Valhalla format
+                if (!data.routes || data.routes.length === 0) {
+                    console.error('❌ No routes found in Valhalla response');
+                    this.showNotification('No route found with Valhalla API', 'error');
+                    routeFound = false;
+                } else {
+                    route = data.routes[0];
+                    routePoints = route.geometry.coordinates.map(coord => L.latLng(coord[1], coord[0]));
+                    routeFound = true;
+                    console.log('🛣️ Valhalla route data extracted:', route);
+                }
+                
+            } else {
+                // OSRM format
+                if (!data.routes || data.routes.length === 0) {
+                    console.error('❌ No routes found in OSRM response');
+                    this.showNotification('No route found with OSRM API', 'error');
+                    routeFound = false;
+                } else {
+                    route = data.routes[0];
+                    routePoints = route.geometry.coordinates.map(coord => L.latLng(coord[1], coord[0]));
+                    routeFound = true;
+                    console.log('🆓 OSRM route data extracted:', route);
+                }
+            }
+            
+            if (routeFound) {
                 // Store current route data for unit conversion
                 this.currentRouteData = route;
                 
@@ -1339,11 +1463,12 @@ class BikeRoutePlanner {
                 console.log(` Route duration: ${(route.duration / 60).toFixed(1)} min`);
                 console.log(` Return to start: ${returnToStart ? 'Yes' : 'No'}`);
             } else {
-                alert('No route found. Please try different points.');
+                console.error('❌ No route found in API response');
+                this.showNotification('No route found. Please try different points.', 'error');
             }
         } catch (error) {
             console.error('Route generation error:', error);
-            alert('Failed to generate route');
+            this.showNotification('Failed to generate route: ' + error.message, 'error');
         }
     }
     
