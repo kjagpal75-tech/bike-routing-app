@@ -1298,7 +1298,17 @@ class BikeRoutePlanner {
                 }
                 // Map route types to GraphHopper vehicle profiles
                 const vehicleProfile = routeType === 'drive' ? 'car' : routeType === 'cycling' ? 'bike' : 'foot';
-                apiUrl = `https://graphhopper.com/api/1/route?point=${coordinates[0].lat},${coordinates[0].lng}&point=${coordinates[coordinates.length-1].lat},${coordinates[coordinates.length-1].lng}&vehicle=${vehicleProfile}&key=${graphhopperToken}&instructions=true&geometry=true&points_encoded=false`;
+                
+                // Handle waypoints for GraphHopper
+                let apiUrl;
+                if (coordinates.length > 2) {
+                    // Multiple waypoints
+                    const points = coordinates.map(coord => `${coord.lat},${coord.lng}`).join('&point=');
+                    apiUrl = `https://graphhopper.com/api/1/route?point=${points}&vehicle=${vehicleProfile}&key=${graphhopperToken}&instructions=true&geometry=true&points_encoded=false`;
+                } else {
+                    // Simple A-to-B routing
+                    apiUrl = `https://graphhopper.com/api/1/route?point=${coordinates[0].lat},${coordinates[0].lng}&point=${coordinates[coordinates.length-1].lat},${coordinates[coordinates.length-1].lng}&vehicle=${vehicleProfile}&key=${graphhopperToken}&instructions=true&geometry=true&points_encoded=false`;
+                }
             } else if (routingApi === 'openrouteservice') {
                 // OpenRouteService Directions API
                 const orsKey = this.getOpenRouteServiceKey();
@@ -1309,13 +1319,14 @@ class BikeRoutePlanner {
                 // Map route types to ORS profiles
                 const orsProfile = routeType === 'drive' ? 'driving-car' : routeType === 'cycling' ? 'cycling-regular' : 'foot-walking';
                 
-                // Handle return-to-start case
-                if (returnToStart && coordinates.length >= 2) {
-                    // For return-to-start, use the full coordinate list
+                // Handle waypoints for OpenRouteService
+                let apiUrl;
+                if (coordinates.length > 2) {
+                    // Multiple waypoints - use coordinates parameter
                     const coords = coordinates.map(coord => `${coord.lng},${coord.lat}`).join('|');
                     apiUrl = `https://api.openrouteservice.org/v2/directions/${orsProfile}?api_key=${orsKey}&coordinates=${coords}`;
                 } else {
-                    // For simple A-to-B routing, use start and end parameters
+                    // Simple A-to-B routing
                     apiUrl = `https://api.openrouteservice.org/v2/directions/${orsProfile}?api_key=${orsKey}&start=${coordinates[0].lng},${coordinates[0].lat}&end=${coordinates[coordinates.length-1].lng},${coordinates[coordinates.length-1].lat}`;
                 }
             } else {
