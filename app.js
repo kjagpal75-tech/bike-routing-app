@@ -33,26 +33,18 @@ class BikeRoutePlanner {
         
         console.log('🔄 convertDistance called with:', meters, 'meters');
         
-        // OSRM returns distance in meters, but let's handle potential unit issues
-        let actualMeters = meters;
-        
-        // If the value seems too large to be meters, it might already be in a different unit
-        if (meters > 1000000) {
-            console.warn('⚠️ Distance value seems too large for meters:', meters);
-            // If it's > 1,000,000, it might be in centimeters or there's an error
-            // Let's assume it's in kilometers and convert to meters
-            actualMeters = meters / 1000;
-            console.log('🔄 Assuming input was in cm or had error, converting to meters:', actualMeters);
-        }
+        // OSRM API returns distance in meters
+        // Convert meters to kilometers first
+        const kilometers = meters / 1000;
+        console.log('🔄 Meters to kilometers:', kilometers);
         
         if (isImperial) {
-            const miles = actualMeters * 0.621371;
-            console.log('🔄 Converting', actualMeters, 'meters to miles:', miles);
+            // Convert kilometers to miles: 1 km = 0.621371 miles
+            const miles = kilometers * 0.621371;
+            console.log('🔄 Kilometers to miles:', miles);
             return miles.toFixed(2) + ' miles';
         } else {
-            const km = actualMeters / 1000;
-            console.log('🔄 Converting', actualMeters, 'meters to km:', km);
-            return km.toFixed(2) + ' km';
+            return kilometers.toFixed(2) + ' km';
         }
     }
     
@@ -1259,12 +1251,17 @@ class BikeRoutePlanner {
         const distance = this.convertDistance(routeData.distance);
         const duration = Math.round(routeData.duration / 60);
         
-        // Calculate speed in km/h first, then convert
-        const speedKmh = routeData.distance / 1000 / (routeData.duration / 60);
+        // Calculate speed: distance (meters) / time (seconds) = m/s, then convert to km/h
+        const speedMs = routeData.distance / routeData.duration; // meters per second
+        const speedKmh = speedMs * 3.6; // convert m/s to km/h
         const speed = this.convertSpeed(speedKmh);
         
-        console.log('🔄 Calculated speedKmh:', speedKmh);
-        console.log('🔄 Converted speed:', speed);
+        console.log('🔄 Speed calculation:');
+        console.log('  Distance (m):', routeData.distance);
+        console.log('  Duration (s):', routeData.duration);
+        console.log('  Speed (m/s):', speedMs);
+        console.log('  Speed (km/h):', speedKmh);
+        console.log('  Speed (converted):', speed);
         
         routeInfoDiv.innerHTML = `
             <div class="route-stats">
