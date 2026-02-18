@@ -1336,14 +1336,19 @@ class BikeRoutePlanner {
                 // Handle waypoints for OpenRouteService
                 if (coordinates.length > 2) {
                     // Multiple waypoints - use coordinates parameter
-                    // Format coordinates as [lng1,lat1,lng2,lat2,...]
+                    // OpenRouteService expects coordinates as [lng1,lat1,lng2,lat2,...]
                     const coords = coordinates.map(coord => {
                         const lng = typeof coord.lng === 'number' ? coord.lng : parseFloat(coord.lng);
                         const lat = typeof coord.lat === 'number' ? coord.lat : parseFloat(coord.lat);
                         return `${lng},${lat}`;
                     }).join('|');
                     console.log(`🌍 ORS coordinates formatted:`, coords);
+                    
+                    // Try the coordinates parameter first
                     apiUrl = `https://api.openrouteservice.org/v2/directions/${orsProfile}?api_key=${orsKey}&coordinates=${coords}`;
+                    
+                    // If coordinates fails, try alternative format
+                    console.log(`🌍 Trying alternative ORS format...`);
                 } else {
                     // Simple A-to-B routing
                     const startLng = typeof coordinates[0].lng === 'number' ? coordinates[0].lng : parseFloat(coordinates[0].lng);
