@@ -1391,10 +1391,15 @@ class BikeRoutePlanner {
                 
                 // Try different approaches in order of preference
                 const approaches = [
-                    // 1. True Valhalla API via CORS proxy (authentic routing)
+                    // 1. Try multiple CORS proxies for true Valhalla API
                     {
                         url: `https://corsproxy.io/?https://valhalla.openstreetmap.de/route/${valhallaProfile}?json=${encodeURIComponent(JSON.stringify(valhallaData))}`,
-                        name: 'Valhalla (authentic routing)',
+                        name: 'Valhalla (authentic routing) - corsproxy.io',
+                        processor: 'valhalla'
+                    },
+                    {
+                        url: `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://valhalla.openstreetmap.de/route/${valhallaProfile}?json=${encodeURIComponent(JSON.stringify(valhallaData))}`)}`,
+                        name: 'Valhalla (authentic routing) - allorigins',
                         processor: 'valhalla'
                     },
                     // 2. Direct OSRM (fallback, no CORS issues but different routing)
