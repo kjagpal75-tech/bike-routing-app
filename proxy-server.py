@@ -8,6 +8,8 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 import urllib.request
 import urllib.parse
 import json
+import os
+import mimetypes
 
 class ProxyHandler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -36,7 +38,43 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 self.send_error(500, f"Proxy error: {str(e)}")
         else:
             # Serve static files
-            super().do_GET()
+            self.serve_static_file()
+    
+    def serve_static_file(self):
+        try:
+            # Determine file path
+            if self.path == '/':
+                file_path = 'index.html'
+            else:
+                file_path = self.path.lstrip('/')
+            
+            # Security check - prevent directory traversal
+            if '..' in file_path or file_path.startswith('/'):
+                self.send_error(403, "Forbidden")
+                return
+            
+            # Check if file exists
+            if not os.path.exists(file_path):
+                self.send_error(404, "File not found")
+                return
+            
+            # Get MIME type
+            mime_type, _ = mimetypes.guess_type(file_path)
+            if mime_type is None:
+                mime_type = 'application/octet-stream'
+            
+            # Read and serve file
+            with open(file_path, 'rb') as f:
+                content = f.read()
+            
+            self.send_response(200)
+            self.send_header('Content-Type', mime_type)
+            self.send_header('Content-Length', str(len(content)))
+            self.end_headers()
+            self.wfile.write(content)
+            
+        except Exception as e:
+            self.send_error(500, f"Server error: {str(e)}")
     
     def do_OPTIONS(self):
         # Handle preflight requests
