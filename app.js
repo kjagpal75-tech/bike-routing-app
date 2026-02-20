@@ -1691,7 +1691,7 @@ class BikeRoutePlanner {
                     console.log('🛣️ Valhalla route data extracted:', route);
                 }
                 
-            } else {
+            } else if (routingApi === 'osrm') {
                 // OSRM format
                 if (!data.routes || data.routes.length === 0) {
                     console.error('❌ No routes found in OSRM response');
