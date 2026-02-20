@@ -288,6 +288,10 @@ class BikeRoutePlanner {
             }
             
             suggestionDiv.textContent = displayName;
+            suggestionDiv.addEventListener('mousedown', (e) => {
+                e.preventDefault(); // Prevent blur from firing first
+                this.selectSuggestion(result, type);
+            });
             suggestionDiv.addEventListener('click', () => {
                 this.selectSuggestion(result, type);
             });
@@ -1005,6 +1009,10 @@ class BikeRoutePlanner {
             }
             
             suggestionDiv.textContent = displayName;
+            suggestionDiv.addEventListener('mousedown', (e) => {
+                e.preventDefault(); // Prevent blur from firing first
+                this.selectWaypointSuggestion(result, waypointId);
+            });
             suggestionDiv.addEventListener('click', () => {
                 this.selectWaypointSuggestion(result, waypointId);
             });
@@ -1041,8 +1049,8 @@ class BikeRoutePlanner {
             waypoint.marker.setLatLng(latlng);
         }
         
-        // Update input with selected address
-        const waypointInput = document.querySelector(`.waypoint-item input[placeholder*="California"]`);
+        // Update input with selected address - use specific ID
+        const waypointInput = document.getElementById(`waypointInput${waypointId}`);
         if (waypointInput) {
             waypointInput.value = result.display_name;
         }
