@@ -22,14 +22,40 @@ class ProxyHandler(BaseHTTPRequestHandler):
             path_parts = self.path.split('?', 1)
             valhalla_path = path_parts[0].replace('/valhalla/', '')
             json_data = path_parts[1] if len(path_parts) > 1 else ''
-            valhalla_url = f'https://valhalla.openstreetmap.de/{valhalla_path}'
+            valhalla_url = f'https://valhalla1.openstreetmap.de/{valhalla_path}'
             
             print(f"🛣️ Proxy request: {self.path}")
             print(f"🛣️ Valhalla URL: {valhalla_url}")
             print(f"🛣️ JSON data: {json_data}")
             
-            # Valhalla API requires POST requests
-            self.do_POST_Valhalla(valhalla_url, json_data)
+            # Valhalla API uses GET requests with JSON parameter
+            try:
+                # Create GET request with JSON parameter
+                req = urllib.request.Request(valhalla_url)
+                req.add_header('User-Agent', 'BikeRoutePlanner/1.0')
+                
+                with urllib.request.urlopen(req) as response:
+                    data = response.read()
+                    print(f"🛣️ Response status: {response.status}")
+                    print(f"🛣️ Response content type: {response.headers.get('Content-Type', 'Unknown')}")
+                    print(f"🛣️ Response length: {len(data)} bytes")
+                    
+                    # Debug: Show first 200 characters of response
+                    response_preview = data[:200].decode('utf-8', errors='ignore')
+                    print(f"🛣️ Response preview: {response_preview}")
+                    
+                    # Send response back with CORS headers
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'application/json')
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+                    self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+                    self.end_headers()
+                    self.wfile.write(data)
+                    
+            except Exception as e:
+                print(f"🛣️ Proxy error: {e}")
+                self.send_error(500, f"Proxy error: {str(e)}")
         else:
             # Serve static files
             self.serve_static_file()

@@ -1402,24 +1402,25 @@ class BikeRoutePlanner {
                 const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
                 
                 const approaches = [
-                    // 1. Local proxy for Valhalla API (when running locally with proxy server)
+                    // 1. Local proxy for Valhalla API (using working valhalla1 endpoint)
                     ...(isLocalhost ? [{
-                        url: `/valhalla/route/${valhallaProfile}`,
-                        name: 'Valhalla (local proxy - no CORS)',
+                        url: `/valhalla/route?json=${encodeURIComponent(JSON.stringify(valhallaData))}`,
+                        name: 'Valhalla (local proxy - working API)',
                         processor: 'valhalla',
-                        method: 'POST',
-                        body: JSON.stringify(valhallaData)
+                        method: 'GET',
+                        body: null
                     }] : []),
-                    // 2. CORS proxies for true Valhalla API (when running on GitHub Pages)
+                    // 2. Direct Valhalla1 API (working endpoint, no proxy needed)
                     {
-                        url: `https://corsproxy.io/?https://valhalla.openstreetmap.de/route/${valhallaProfile}?json=${encodeURIComponent(JSON.stringify(valhallaData))}`,
-                        name: 'Valhalla (authentic routing) - corsproxy.io',
+                        url: `https://valhalla1.openstreetmap.de/route?json=${encodeURIComponent(JSON.stringify(valhallaData))}`,
+                        name: 'Valhalla (direct API - Morrison Canyon Road)',
                         processor: 'valhalla',
                         method: 'GET'
                     },
+                    // 3. CORS proxies for Valhalla API (using correct endpoint)
                     {
-                        url: `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://valhalla.openstreetmap.de/route/${valhallaProfile}?json=${encodeURIComponent(JSON.stringify(valhallaData))}`)}`,
-                        name: 'Valhalla (authentic routing) - allorigins',
+                        url: `https://corsproxy.io/?https://valhalla1.openstreetmap.de/route?json=${encodeURIComponent(JSON.stringify(valhallaData))}`,
+                        name: 'Valhalla (authentic routing) - corsproxy.io',
                         processor: 'valhalla',
                         method: 'GET'
                     },
@@ -1439,15 +1440,15 @@ class BikeRoutePlanner {
                 
                 console.log(`🛣️ Using approach: ${approaches[0].name}`);
                 console.log(`🛣️ API URL: ${apiUrl}`);
-                if (isLocalhost) {
-                    console.log(`🛣️ 🎉 Running locally with proxy server - direct Valhalla access!`);
-                    console.log(`🛣️ 🛣️ Authentic routing via Morrison Canyon Road available!`);
-                    console.log(`🛣️ 💡 If proxy server not running, use: python3 proxy-server.py`);
+                if (approaches[0].name.includes('Valhalla')) {
+                    console.log(`🛣️ 🎉 Using working Valhalla API with Morrison Canyon Road routing!`);
+                    console.log(`🛣️ 🛣️ Authentic Valhalla routing preferences available!`);
+                    if (isLocalhost) {
+                        console.log(`🛣️ 💡 If proxy server not running, use: python3 proxy-server.py`);
+                    }
                 } else {
-                    console.log(`🛣️ 💡 For authentic Valhalla routing via Morrison Canyon Road:`);
-                    console.log(`🛣️ 💡 Run locally: python3 proxy-server.py`);
-                    console.log(`🛣️ 💡 Then visit: http://localhost:8000 for direct Valhalla access`);
-                    console.log(`🛣️ 💡 Local bypasses CORS and gives true Valhalla routing preferences`);
+                    console.log(`🛣️ 💡 For best results, run locally: python3 proxy-server.py`);
+                    console.log(`🛣️ 💡 Then visit: http://localhost:8000 for direct API access`);
                 }
             } else if (routingApi === 'graphhopper') {
                 // GraphHopper Directions API
