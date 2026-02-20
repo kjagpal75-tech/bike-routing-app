@@ -1847,7 +1847,7 @@ class BikeRoutePlanner {
                 // Store current route data for unit conversion
                 this.currentRouteData = route;
                 
-                console.log('🛣️ About to display route with routePoints:', routePoints.length, 'points');
+                console.log(`🛣️ About to display route with routePoints: ${routePoints.length} points`);
                 console.log('🛣️ routePoints sample:', routePoints.slice(0, 3));
                 console.log('🛣️ routePoints type:', typeof routePoints[0]);
                 console.log('🛣️ routePoints[0] lat/lng:', routePoints[0] ? [routePoints[0].lat, routePoints[0].lng] : 'undefined');
@@ -1855,6 +1855,7 @@ class BikeRoutePlanner {
                 // Validate routePoints before display
                 if (!routePoints || routePoints.length === 0) {
                     console.error('❌ No valid routePoints for display');
+                    this.showNotification('No route points available for map display', 'error');
                     return;
                 }
                 
@@ -1862,11 +1863,13 @@ class BikeRoutePlanner {
                 const firstPoint = routePoints[0];
                 if (!firstPoint || typeof firstPoint.lat !== 'number' || typeof firstPoint.lng !== 'number') {
                     console.error('❌ Invalid coordinates in routePoints:', firstPoint);
+                    this.showNotification('Invalid route coordinates for map display', 'error');
                     return;
                 }
                 
                 console.log('🛣️ Validating bounds with first point:', firstPoint);
                 console.log('🛣️ Validating bounds with last point:', routePoints[routePoints.length - 1]);
+                console.log('🛣️ Proceeding to display route...');
                 
                 this.displayRoute(routePoints, route);
                 
