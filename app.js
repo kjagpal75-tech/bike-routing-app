@@ -1390,14 +1390,14 @@ class BikeRoutePlanner {
                 };
                 
                 // Try different approaches in order of preference
-                // Check if running locally - if so, use direct Valhalla access
+                // Check if running locally - if so, use local proxy for direct Valhalla access
                 const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
                 
                 const approaches = [
-                    // 1. Direct Valhalla API (when running locally - no CORS issues)
+                    // 1. Local proxy for Valhalla API (when running locally with proxy server)
                     ...(isLocalhost ? [{
-                        url: `https://valhalla.openstreetmap.de/route/${valhallaProfile}?json=${encodeURIComponent(JSON.stringify(valhallaData))}`,
-                        name: 'Valhalla (direct local access)',
+                        url: `/valhalla/route/${valhallaProfile}?json=${encodeURIComponent(JSON.stringify(valhallaData))}`,
+                        name: 'Valhalla (local proxy - no CORS)',
                         processor: 'valhalla'
                     }] : []),
                     // 2. CORS proxies for true Valhalla API (when running on GitHub Pages)
@@ -1427,11 +1427,12 @@ class BikeRoutePlanner {
                 console.log(`🛣️ Using approach: ${approaches[0].name}`);
                 console.log(`🛣️ API URL: ${apiUrl}`);
                 if (isLocalhost) {
-                    console.log(`🛣️ 🎉 Running locally - direct Valhalla access (no CORS issues!)`);
+                    console.log(`🛣️ 🎉 Running locally with proxy server - direct Valhalla access!`);
                     console.log(`🛣️ 🛣️ Authentic routing via Morrison Canyon Road available!`);
+                    console.log(`🛣️ 💡 If proxy server not running, use: python3 proxy-server.py`);
                 } else {
                     console.log(`🛣️ 💡 For authentic Valhalla routing via Morrison Canyon Road:`);
-                    console.log(`🛣️ 💡 Run locally: python -m http.server 8000`);
+                    console.log(`🛣️ 💡 Run locally: python3 proxy-server.py`);
                     console.log(`🛣️ 💡 Then visit: http://localhost:8000 for direct Valhalla access`);
                     console.log(`🛣️ 💡 Local bypasses CORS and gives true Valhalla routing preferences`);
                 }
