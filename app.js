@@ -1766,11 +1766,11 @@ class BikeRoutePlanner {
                 
             } else if (routingApi === 'valhalla') {
                 console.log(`🛣️ Valhalla response structure:`, {
-                    routes: data.routes,
-                    routesLength: data.routes?.length,
-                    firstRoute: data.routes?.[0],
-                    legs: data.routes?.[0]?.legs,
-                    steps: data.routes?.[0]?.legs?.[0]?.steps
+                    trip: data.trip,
+                    legs: data.trip?.legs,
+                    legsLength: data.trip?.legs?.length,
+                    firstLeg: data.trip?.legs?.[0],
+                    maneuvers: data.trip?.legs?.[0]?.maneuvers
                 });
                 
                 // Handle different response formats based on approach
@@ -1788,21 +1788,33 @@ class BikeRoutePlanner {
                     }
                 } else {
                     // Valhalla format processing (when using true Valhalla API)
-                    if (!data.routes || data.routes.length === 0) {
-                        console.error('❌ No routes found in Valhalla response');
+                    if (!data.trip || !data.trip.legs || data.trip.legs.length === 0) {
+                        console.error('❌ No trip found in Valhalla response');
                         this.showNotification('No route found with Valhalla API', 'error');
                         routeFound = false;
                     } else {
-                        route = data.routes[0];
-                        // Valhalla public endpoint returns geometry as encoded polyline
-                        if (route.geometry) {
+                        // Valhalla API returns trip structure with legs
+                        const trip = data.trip;
+                        
+                        // Create a consistent route structure for the app
+                        route = {
+                            legs: trip.legs,
+                            distance: trip.summary.length,
+                            duration: trip.summary.time,
+                            geometry: {
+                                coordinates: trip.shape ? this.decodePolyline(trip.shape) : []
+                            }
+                        };
+                        
+                        // Valhalla returns geometry as encoded polyline in shape
+                        if (trip.shape) {
                             // Decode Valhalla polyline to coordinates
-                            routePoints = this.decodePolyline(route.geometry);
+                            routePoints = this.decodePolyline(trip.shape);
                         } else {
                             routePoints = [];
                         }
                         routeFound = true;
-                        console.log('🛣️ Valhalla route data extracted:', route);
+                        console.log('🛣️ Valhalla route data extracted:', trip);
                     }
                 }
             } else if (routingApi === 'osrm') {
@@ -1824,7 +1836,16 @@ class BikeRoutePlanner {
                 this.currentRouteData = route;
                 
                 this.displayRoute(routePoints, route);
-                this.displayTurnDirections(route.legs[0].steps);
+                
+                // Handle different step formats for different APIs
+                if (routingApi === 'valhalla' && route.legs && route.legs[0] && route.legs[0].maneuvers) {
+                    // Valhalla uses maneuvers instead of steps
+                    this.displayTurnDirections(route.legs[0].maneuvers);
+                } else if (route.legs && route.legs[0] && route.legs[0].steps) {
+                    // OSRM and others use steps
+                    this.displayTurnDirections(route.legs[0].steps);
+                }
+                
                 this.displayRouteInfo(route);
                 
                 // Get elevation data for the route
@@ -2327,6 +2348,14 @@ class BikeRoutePlanner {
                 distance: step.distance || 0,
                 duration: step.duration || 0,
                 maneuver: step.maneuver || {}
+            }));
+        } else if (apiType === 'valhalla') {
+            // Valhalla API format - uses maneuvers
+            processedSteps = steps.map((step, index) => ({
+                instruction: step.instruction || 'Continue',
+                distance: step.length || 0,
+                duration: step.time || 0,
+                maneuver: step
             }));
         } else {
             // OSRM API format
