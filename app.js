@@ -2259,11 +2259,11 @@ class BikeRoutePlanner {
             }));
         } else if (apiType === 'valhalla') {
             // Valhalla API format - public endpoint
-            if (data.routes && data.routes[0] && data.routes[0].legs) {
-                processedSteps = data.routes[0].legs[0].maneuvers.map((step, index) => ({
-                    instruction: step.instruction || 'Continue',
-                    distance: step.length || 0,
-                    duration: step.time || 0,
+            if (steps && steps.length > 0) {
+                processedSteps = steps.map((step, index) => ({
+                    instruction: step.maneuver?.instruction || step.instruction || 'Continue',
+                    distance: step.distance || step.length || 0,
+                    duration: step.duration || step.time || 0,
                     maneuver: step.maneuver || {}
                 }));
             } else {
