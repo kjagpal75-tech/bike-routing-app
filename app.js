@@ -1404,26 +1404,31 @@ class BikeRoutePlanner {
                 const approaches = [
                     // 1. Local proxy for Valhalla API (when running locally with proxy server)
                     ...(isLocalhost ? [{
-                        url: `/valhalla/route/${valhallaProfile}?json=${encodeURIComponent(JSON.stringify(valhallaData))}`,
+                        url: `/valhalla/route/${valhallaProfile}`,
                         name: 'Valhalla (local proxy - no CORS)',
-                        processor: 'valhalla'
+                        processor: 'valhalla',
+                        method: 'POST',
+                        body: JSON.stringify(valhallaData)
                     }] : []),
                     // 2. CORS proxies for true Valhalla API (when running on GitHub Pages)
                     {
                         url: `https://corsproxy.io/?https://valhalla.openstreetmap.de/route/${valhallaProfile}?json=${encodeURIComponent(JSON.stringify(valhallaData))}`,
                         name: 'Valhalla (authentic routing) - corsproxy.io',
-                        processor: 'valhalla'
+                        processor: 'valhalla',
+                        method: 'GET'
                     },
                     {
                         url: `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://valhalla.openstreetmap.de/route/${valhallaProfile}?json=${encodeURIComponent(JSON.stringify(valhallaData))}`)}`,
                         name: 'Valhalla (authentic routing) - allorigins',
-                        processor: 'valhalla'
+                        processor: 'valhalla',
+                        method: 'GET'
                     },
                     // 3. Direct OSRM (fallback, no CORS issues but different routing)
                     {
                         url: `https://router.project-osrm.org/route/v1/${valhallaProfile}/${coordinates.map(c => `${c.lng},${c.lat}`).join(';')}?overview=full&geometries=geojson&steps=true`,
                         name: 'OSRM (fallback - different routing)',
-                        processor: 'osrm'
+                        processor: 'osrm',
+                        method: 'GET'
                     }
                 ];
                 
@@ -1518,12 +1523,13 @@ class BikeRoutePlanner {
             }
             
             console.log(`🌐 API URL: ${apiUrl}`);
+            const currentApproach = this.currentApproach;
             const response = await fetch(apiUrl, {
-                method: this.orsRequestBody ? 'POST' : 'GET',
-                headers: this.orsRequestBody ? {
+                method: currentApproach.method || 'GET',
+                headers: currentApproach.method === 'POST' ? {
                     'Content-Type': 'application/json'
                 } : {},
-                body: this.orsRequestBody || null,
+                body: currentApproach.body || null,
                 mode: 'cors'
             });
             

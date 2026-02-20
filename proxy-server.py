@@ -18,31 +18,72 @@ ssl._create_default_https_context = ssl._create_unverified_context
 class ProxyHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path.startswith('/valhalla/'):
-            # Extract the actual Valhalla URL
-            valhalla_url = self.path.replace('/valhalla/', 'https://valhalla.openstreetmap.de/')
+            # Extract the actual Valhalla URL and JSON data
+            path_parts = self.path.split('?', 1)
+            valhalla_path = path_parts[0].replace('/valhalla/', '')
+            json_data = path_parts[1] if len(path_parts) > 1 else ''
+            valhalla_url = f'https://valhalla.openstreetmap.de/{valhalla_path}'
             
-            try:
-                # Make request to Valhalla
-                req = urllib.request.Request(valhalla_url)
-                req.add_header('User-Agent', 'BikeRoutePlanner/1.0')
-                
-                with urllib.request.urlopen(req) as response:
-                    data = response.read()
-                    
-                    # Send response back with CORS headers
-                    self.send_response(200)
-                    self.send_header('Content-Type', 'application/json')
-                    self.send_header('Access-Control-Allow-Origin', '*')
-                    self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-                    self.send_header('Access-Control-Allow-Headers', 'Content-Type')
-                    self.end_headers()
-                    self.wfile.write(data)
-                    
-            except Exception as e:
-                self.send_error(500, f"Proxy error: {str(e)}")
+            print(f"🛣️ Proxy request: {self.path}")
+            print(f"🛣️ Valhalla URL: {valhalla_url}")
+            print(f"🛣️ JSON data: {json_data}")
+            
+            # Valhalla API requires POST requests
+            self.do_POST_Valhalla(valhalla_url, json_data)
         else:
             # Serve static files
             self.serve_static_file()
+    
+    def do_POST_Valhalla(self, valhalla_url, json_data):
+        try:
+            # Create POST request with JSON data
+            import urllib.request
+            req = urllib.request.Request(valhalla_url, method='POST')
+            req.add_header('User-Agent', 'BikeRoutePlanner/1.0')
+            req.add_header('Content-Type', 'application/json')
+            req.data = json_data.encode('utf-8')
+            
+            with urllib.request.urlopen(req) as response:
+                data = response.read()
+                print(f"🛣️ Response status: {response.status}")
+                print(f"🛣️ Response content type: {response.headers.get('Content-Type', 'Unknown')}")
+                print(f"🛣️ Response length: {len(data)} bytes")
+                
+                # Debug: Show first 200 characters of response
+                response_preview = data[:200].decode('utf-8', errors='ignore')
+                print(f"🛣️ Response preview: {response_preview}")
+                
+                # Send response back with CORS headers
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+                self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+                self.end_headers()
+                self.wfile.write(data)
+                
+        except Exception as e:
+            print(f"🛣️ Proxy error: {e}")
+            self.send_error(500, f"Proxy error: {str(e)}")
+    
+    def do_POST(self):
+        # Handle POST requests for Valhalla
+        if self.path.startswith('/valhalla/'):
+            # Extract the actual Valhalla URL
+            valhalla_url = self.path.replace('/valhalla/', 'https://valhalla.openstreetmap.de/')
+            
+            print(f"🛣️ POST Proxy request: {self.path}")
+            print(f"🛣️ Valhalla URL: {valhalla_url}")
+            
+            # Get the POST data
+            content_length = int(self.headers.get('Content-Length', 0))
+            post_data = self.rfile.read(content_length).decode('utf-8')
+            print(f"🛣️ POST data: {post_data}")
+            
+            # Forward the POST request
+            self.do_POST_Valhalla(valhalla_url, post_data)
+        else:
+            self.send_error(404, "Not Found")
     
     def serve_static_file(self):
         try:
