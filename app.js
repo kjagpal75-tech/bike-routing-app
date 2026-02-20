@@ -1809,8 +1809,13 @@ class BikeRoutePlanner {
                         // Valhalla returns geometry as encoded polyline in shape
                         if (trip.shape) {
                             // Decode Valhalla polyline to coordinates
+                            console.log('🛣️ Decoding Valhalla polyline:', trip.shape.substring(0, 100) + '...');
                             routePoints = this.decodePolyline(trip.shape);
+                            console.log('🛣️ Decoded routePoints:', routePoints.length, 'points');
+                            console.log('🛣️ First point:', routePoints[0]);
+                            console.log('🛣️ Last point:', routePoints[routePoints.length - 1]);
                         } else {
+                            console.log('🛣️ No shape data in Valhalla response');
                             routePoints = [];
                         }
                         routeFound = true;
