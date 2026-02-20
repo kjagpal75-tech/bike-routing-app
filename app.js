@@ -1373,7 +1373,7 @@ class BikeRoutePlanner {
                 }
                 apiUrl = `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${routeType}/${coordsStr}?access_token=${mapboxToken}&geometries=geojson&steps=true&overview=full`;
             } else if (routingApi === 'valhalla') {
-                // Valhalla Directions API - using CORS proxy
+                // Valhalla Directions API - multiple CORS approaches
                 // Map route types to Valhalla profiles
                 const valhallaProfile = routeType === 'drive' ? 'auto' : routeType === 'cycling' ? 'bicycle' : 'pedestrian';
                 
@@ -1389,13 +1389,14 @@ class BikeRoutePlanner {
                     units: 'kilometers'
                 };
                 
-                // Use a reliable CORS proxy
+                // Try multiple CORS proxy approaches
                 const valhallaUrl = `https://valhalla.openstreetmap.de/route/${valhallaProfile}?json=${encodeURIComponent(JSON.stringify(valhallaData))}`;
                 
-                // Try multiple CORS proxy approaches
+                // Primary CORS proxy
                 apiUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(valhallaUrl)}`;
                 console.log(`🛣️ Using CORS proxy for Valhalla:`, apiUrl);
                 console.log(`🛣️ Original Valhalla URL:`, valhallaUrl);
+                console.log(`🛣️ Note: If this fails, try running the app locally for direct Valhalla access`);
             } else if (routingApi === 'graphhopper') {
                 // GraphHopper Directions API
                 const graphhopperToken = this.getGraphhopperToken();
@@ -1715,10 +1716,18 @@ class BikeRoutePlanner {
             // Handle CORS errors specifically
             if (error.message && error.message.includes('CORS')) {
                 console.error('❌ CORS Error: Unable to access API due to Cross-Origin policy');
-                this.showNotification('CORS error: Unable to connect to routing API. Try using a different API or running locally.', 'error');
+                if (routingApi === 'valhalla') {
+                    this.showNotification('Valhalla CORS error: Try running the app locally (python -m http.server 8000) for direct access, or use OSRM/Mapbox APIs.', 'error');
+                } else {
+                    this.showNotification('CORS error: Unable to connect to routing API. Try using a different API or running locally.', 'error');
+                }
             } else if (error.message && error.message.includes('Failed to fetch')) {
                 console.error('❌ Network Error: Unable to fetch from API');
-                this.showNotification('Network error: Unable to connect to routing API. Check your internet connection.', 'error');
+                if (routingApi === 'valhalla') {
+                    this.showNotification('Valhalla network error: CORS proxy may be down. Try OSRM or Mapbox APIs instead.', 'error');
+                } else {
+                    this.showNotification('Network error: Unable to connect to routing API. Check your internet connection.', 'error');
+                }
             } else {
                 this.showNotification('Failed to generate route. Please try again.', 'error');
             }
