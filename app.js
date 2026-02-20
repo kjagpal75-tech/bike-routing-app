@@ -592,6 +592,46 @@ class BikeRoutePlanner {
         return null;
     }
     
+    decodePolyline(encoded) {
+        // Decode Valhalla polyline format
+        const points = [];
+        let index = 0;
+        const len = encoded.length;
+        let lat = 0;
+        let lng = 0;
+        
+        while (index < len) {
+            let shift = 0;
+            let result = 0;
+            let b;
+            
+            do {
+                b = encoded.charCodeAt(index++) - 63;
+                result |= (b & 0x1f) << shift;
+                shift += 5;
+            } while (b >= 0x20);
+            
+            const dlat = ((result & 1) ? ~(result >> 1) : (result >> 1));
+            lat += dlat;
+            
+            shift = 0;
+            result = 0;
+            
+            do {
+                b = encoded.charCodeAt(index++) - 63;
+                result |= (b & 0x1f) << shift;
+                shift += 5;
+            } while (b >= 0x20);
+            
+            const dlng = ((result & 1) ? ~(result >> 1) : (result >> 1));
+            lng += dlng;
+            
+            points.push([lat / 1e5, lng / 1e5]);
+        }
+        
+        return points.map(coord => L.latLng(coord[0], coord[1]));
+    }
+    
     getRouteTypeDescription(routeType) {
         const descriptions = {
             'drive': '�️ Road (Paved Only) - Recommended for road bikes and racing bikes',
@@ -1333,13 +1373,21 @@ class BikeRoutePlanner {
                 }
                 apiUrl = `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${routeType}/${coordsStr}?access_token=${mapboxToken}&geometries=geojson&steps=true&overview=full`;
             } else if (routingApi === 'valhalla') {
-                // Valhalla Directions API
-                const valhallaToken = this.getValhallaToken();
-                if (!valhallaToken) {
-                    this.showNotification('Valhalla token required. Please add your Valhalla token in the token in the settings.', 'error');
-                    return;
-                }
-                apiUrl = `https://router.valhalla.com/route/${routeType}/${coordsStr}?access_token=${valhallaToken}&geometries=geojson&steps=true`;
+                // Valhalla Directions API - using public endpoint
+                // Map route types to Valhalla profiles
+                const valhallaProfile = routeType === 'drive' ? 'auto' : routeType === 'cycling' ? 'bicycle' : 'pedestrian';
+                
+                // Use public Valhalla endpoint - no API key required
+                apiUrl = `https://valhalla.openstreetmap.de/route/${valhallaProfile}?json=${encodeURIComponent(JSON.stringify({
+                    locations: coordinates.map(coord => ({
+                        lat: coord.lat,
+                        lon: coord.lng
+                    })),
+                    costing: valhallaProfile,
+                    directions_maneuvers: true,
+                    geometry: true,
+                    units: 'kilometers'
+                }))}`;
             } else if (routingApi === 'graphhopper') {
                 // GraphHopper Directions API
                 const graphhopperToken = this.getGraphhopperToken();
@@ -1589,14 +1637,20 @@ class BikeRoutePlanner {
                 }
                 
             } else if (routingApi === 'valhalla') {
-                // Valhalla format
+                // Valhalla format - public endpoint response structure
                 if (!data.routes || data.routes.length === 0) {
                     console.error('❌ No routes found in Valhalla response');
                     this.showNotification('No route found with Valhalla API', 'error');
                     routeFound = false;
                 } else {
                     route = data.routes[0];
-                    routePoints = route.geometry.coordinates.map(coord => L.latLng(coord[1], coord[0]));
+                    // Valhalla public endpoint returns geometry as encoded polyline
+                    if (route.geometry) {
+                        // Decode Valhalla polyline to coordinates
+                        routePoints = this.decodePolyline(route.geometry);
+                    } else {
+                        routePoints = [];
+                    }
                     routeFound = true;
                     console.log('🛣️ Valhalla route data extracted:', route);
                 }
@@ -2079,13 +2133,17 @@ class BikeRoutePlanner {
                 maneuver: step.maneuver || {}
             }));
         } else if (apiType === 'valhalla') {
-            // Valhalla API format
-            processedSteps = steps.legs[0].steps.map((step, index) => ({
-                instruction: step.maneuver.instruction || 'Continue',
-                distance: step.distance || 0,
-                duration: step.duration || 0,
-                maneuver: step.maneuver || {}
-            }));
+            // Valhalla API format - public endpoint
+            if (data.routes && data.routes[0] && data.routes[0].legs) {
+                processedSteps = data.routes[0].legs[0].maneuvers.map((step, index) => ({
+                    instruction: step.instruction || 'Continue',
+                    distance: step.length || 0,
+                    duration: step.time || 0,
+                    maneuver: step.maneuver || {}
+                }));
+            } else {
+                processedSteps = [];
+            }
         } else if (apiType === 'graphhopper') {
             // GraphHopper API format
             processedSteps = steps.paths[0].instructions.map((step, index) => ({
