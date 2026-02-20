@@ -1808,17 +1808,21 @@ class BikeRoutePlanner {
                             }
                         };
                         
-                        // Valhalla returns geometry as encoded polyline in shape
-                        if (trip.shape) {
+                        // Valhalla returns geometry as encoded polyline in shape (inside legs[0])
+                        if (trip.legs && trip.legs[0] && trip.legs[0].shape) {
                             // Decode Valhalla polyline to coordinates
-                            console.log('🛣️ Decoding Valhalla polyline:', trip.shape.substring(0, 100) + '...');
-                            routePoints = this.decodePolyline(trip.shape);
+                            console.log('🛣️ Decoding Valhalla polyline from legs[0].shape:', trip.legs[0].shape.substring(0, 100) + '...');
+                            routePoints = this.decodePolyline(trip.legs[0].shape);
                             console.log('🛣️ Decoded routePoints:', routePoints.length, 'points');
                             console.log('🛣️ First point:', routePoints[0]);
                             console.log('🛣️ Last point:', routePoints[routePoints.length - 1]);
                         } else {
                             console.log('🛣️ No shape data in Valhalla response');
                             console.log('🛣️ Available keys in trip:', Object.keys(trip));
+                            console.log('🛣️ Legs available:', trip.legs ? trip.legs.length : 'none');
+                            if (trip.legs && trip.legs[0]) {
+                                console.log('🛣️ Keys in legs[0]:', Object.keys(trip.legs[0]));
+                            }
                             routePoints = [];
                         }
                         routeFound = true;
