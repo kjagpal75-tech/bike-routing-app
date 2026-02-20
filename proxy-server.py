@@ -45,11 +45,13 @@ class ProxyHandler(BaseHTTPRequestHandler):
             # Get the directory where the script is located
             script_dir = os.path.dirname(os.path.abspath(__file__))
             
-            # Determine file path
+            # Determine file path and strip query parameters
             if self.path == '/':
                 file_path = os.path.join(script_dir, 'index.html')
             else:
-                file_path = os.path.join(script_dir, self.path.lstrip('/'))
+                # Remove query parameters (e.g., app.js?v=2.1.0 -> app.js)
+                clean_path = self.path.lstrip('/').split('?')[0]
+                file_path = os.path.join(script_dir, clean_path)
             
             # Security check - prevent directory traversal
             if '..' in file_path or not file_path.startswith(script_dir):
@@ -57,6 +59,8 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 return
             
             # Debug logging
+            print(f"📁 Original path: {self.path}")
+            print(f"📁 Clean path: {clean_path}")
             print(f"📁 Serving file: {file_path}")
             print(f"📁 File exists: {os.path.exists(file_path)}")
             
