@@ -1373,7 +1373,7 @@ class BikeRoutePlanner {
                 }
                 apiUrl = `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${routeType}/${coordsStr}?access_token=${mapboxToken}&geometries=geojson&steps=true&overview=full`;
             } else if (routingApi === 'valhalla') {
-                // Valhalla Directions API - multiple fallback approaches
+                // Valhalla Directions API - simplified approach
                 // Map route types to Valhalla profiles
                 const valhallaProfile = routeType === 'drive' ? 'auto' : routeType === 'cycling' ? 'bicycle' : 'pedestrian';
                 
@@ -1389,26 +1389,16 @@ class BikeRoutePlanner {
                     units: 'kilometers'
                 };
                 
-                // Try multiple CORS proxy approaches in order of reliability
+                // Use the most reliable CORS proxy
                 const valhallaUrl = `https://valhalla.openstreetmap.de/route/${valhallaProfile}?json=${encodeURIComponent(JSON.stringify(valhallaData))}`;
                 
-                // Try different CORS proxies
-                const corsProxies = [
-                    `https://corsproxy.io/?${valhallaUrl}`,
-                    `https://api.allorigins.win/raw?url=${encodeURIComponent(valhallaUrl)}`,
-                    `https://cors-anywhere.herokuapp.com/${valhallaUrl}`
-                ];
+                // Try JSONP approach as fallback
+                apiUrl = `https://corsproxy.io/?${valhallaUrl}`;
                 
-                // Use first proxy by default
-                apiUrl = corsProxies[0];
-                this.corsProxyIndex = 0;
-                this.corsProxies = corsProxies;
-                this.valhallaUrl = valhallaUrl;
-                
-                console.log(`🛣️ Using CORS proxy ${this.corsProxyIndex + 1} for Valhalla:`, apiUrl);
+                console.log(`🛣️ Using CORS proxy for Valhalla:`, apiUrl);
                 console.log(`🛣️ Original Valhalla URL:`, valhallaUrl);
-                console.log(`🛣️ Available proxies:`, corsProxies);
-                console.log(`🛣️ Note: If all proxies fail, try running the app locally for direct Valhalla access`);
+                console.log(`🛣️ 💡 For best results, run app locally: python -m http.server 8000`);
+                console.log(`🛣️ 💡 Then visit: http://localhost:8000 for direct Valhalla access`);
             } else if (routingApi === 'graphhopper') {
                 // GraphHopper Directions API
                 const graphhopperToken = this.getGraphhopperToken();
@@ -1500,6 +1490,11 @@ class BikeRoutePlanner {
             // Handle CORS proxy response
             if (apiUrl.includes('corsproxy.io') || apiUrl.includes('api.allorigins.win') || apiUrl.includes('cors-anywhere.herokuapp.com')) {
                 try {
+                    // Check if response is HTML (proxy error page)
+                    if (typeof data === 'string' && data.includes('<!DOCTYPE')) {
+                        throw new Error('CORS proxy returned HTML error page');
+                    }
+                    
                     // Different proxies have different response formats
                     if (apiUrl.includes('api.allorigins.win')) {
                         data = typeof data.contents === 'string' ? JSON.parse(data.contents) : data.contents;
@@ -1511,26 +1506,8 @@ class BikeRoutePlanner {
                     console.log(`🛣️ CORS proxy response parsed:`, data);
                 } catch (parseError) {
                     console.error('❌ Failed to parse CORS proxy response:', parseError);
-                    
-                    // Try next proxy if available
-                    if (this.corsProxies && this.corsProxyIndex < this.corsProxies.length - 1) {
-                        this.corsProxyIndex++;
-                        apiUrl = this.corsProxies[this.corsProxyIndex];
-                        console.log(`🔄 Trying next CORS proxy ${this.corsProxyIndex + 1}:`, apiUrl);
-                        
-                        // Retry with next proxy
-                        const retryResponse = await fetch(apiUrl);
-                        const retryData = await retryResponse.json();
-                        
-                        if (apiUrl.includes('api.allorigins.win')) {
-                            data = typeof retryData.contents === 'string' ? JSON.parse(retryData.contents) : retryData.contents;
-                        } else {
-                            data = typeof retryData === 'string' ? JSON.parse(retryData) : retryData;
-                        }
-                        console.log(`🛣️ CORS proxy retry successful:`, data);
-                    } else {
-                        throw new Error('All CORS proxies failed');
-                    }
+                    console.error('❌ Response received:', data);
+                    throw new Error(`CORS proxy failed: ${parseError.message}`);
                 }
             }
             console.log(`🌐 API Response:`, data);
