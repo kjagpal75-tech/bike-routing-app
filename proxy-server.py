@@ -48,6 +48,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
             # Determine file path and strip query parameters
             if self.path == '/':
                 file_path = os.path.join(script_dir, 'index.html')
+                clean_path = 'index.html'
             else:
                 # Remove query parameters (e.g., app.js?v=2.1.0 -> app.js)
                 clean_path = self.path.lstrip('/').split('?')[0]
