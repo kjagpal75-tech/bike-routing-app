@@ -21,8 +21,17 @@ class ProxyHandler(BaseHTTPRequestHandler):
             # Extract the actual Valhalla URL and JSON data
             path_parts = self.path.split('?', 1)
             valhalla_path = path_parts[0].replace('/valhalla/', '')
-            json_data = path_parts[1] if len(path_parts) > 1 else ''
-            valhalla_url = f'https://valhalla1.openstreetmap.de/{valhalla_path}'
+            json_param = path_parts[1] if len(path_parts) > 1 else ''
+            
+            # Extract the JSON data from the json parameter
+            json_data = ''
+            if json_param.startswith('json='):
+                json_data = json_param[5:]  # Remove 'json=' prefix
+                # URL decode the JSON data
+                import urllib.parse
+                json_data = urllib.parse.unquote(json_data)
+            
+            valhalla_url = f'https://valhalla1.openstreetmap.de/{valhalla_path}?json={urllib.parse.quote(json_data)}'
             
             print(f"🛣️ Proxy request: {self.path}")
             print(f"🛣️ Valhalla URL: {valhalla_url}")
