@@ -1840,6 +1840,9 @@ class BikeRoutePlanner {
                 // Store current route data for unit conversion
                 this.currentRouteData = route;
                 
+                console.log('🛣️ About to display route with routePoints:', routePoints.length, 'points');
+                console.log('🛣️ routePoints sample:', routePoints.slice(0, 3));
+                
                 this.displayRoute(routePoints, route);
                 
                 // Handle different step formats for different APIs
