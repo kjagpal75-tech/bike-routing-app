@@ -1843,9 +1843,11 @@ class BikeRoutePlanner {
                 }
             }
             
+            console.log('🛣️ === ROUTE PROCESSING DEBUG ===');
             console.log('🛣️ Route processing complete. routeFound:', routeFound);
             console.log('🛣️ routePoints length:', routePoints.length);
             console.log('🛣️ routingApi:', routingApi);
+            console.log('🛣️ === END ROUTE PROCESSING DEBUG ===');
             
             if (routeFound) {
                 // Store current route data for unit conversion
