@@ -1373,12 +1373,12 @@ class BikeRoutePlanner {
                 }
                 apiUrl = `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${routeType}/${coordsStr}?access_token=${mapboxToken}&geometries=geojson&steps=true&overview=full`;
             } else if (routingApi === 'valhalla') {
-                // Valhalla Directions API - using public endpoint
+                // Valhalla Directions API - using CORS-friendly endpoint
                 // Map route types to Valhalla profiles
                 const valhallaProfile = routeType === 'drive' ? 'auto' : routeType === 'cycling' ? 'bicycle' : 'pedestrian';
                 
-                // Use public Valhalla endpoint - no API key required
-                apiUrl = `https://valhalla.openstreetmap.de/route/${valhallaProfile}?json=${encodeURIComponent(JSON.stringify({
+                // Try different CORS-friendly approaches
+                const valhallaData = {
                     locations: coordinates.map(coord => ({
                         lat: coord.lat,
                         lon: coord.lng
@@ -1387,7 +1387,16 @@ class BikeRoutePlanner {
                     directions_maneuvers: true,
                     geometry: true,
                     units: 'kilometers'
-                }))}`;
+                };
+                
+                // Use JSONP-like approach with CORS proxy
+                const valhallaUrl = `https://valhalla.openstreetmap.de/route/${valhallaProfile}`;
+                
+                // Use fetch with mode 'cors' and proper headers
+                apiUrl = valhallaUrl;
+                this.valhallaRequestBody = JSON.stringify(valhallaData);
+                this.valhallaMethod = 'POST';
+                console.log(`🛣️ Using Valhalla with CORS handling:`, apiUrl);
             } else if (routingApi === 'graphhopper') {
                 // GraphHopper Directions API
                 const graphhopperToken = this.getGraphhopperToken();
@@ -1463,15 +1472,21 @@ class BikeRoutePlanner {
             
             console.log(`🌐 API URL: ${apiUrl}`);
             const response = await fetch(apiUrl, {
-                method: this.orsRequestBody ? 'POST' : 'GET',
+                method: this.orsRequestBody ? 'POST' : (this.valhallaRequestBody ? 'POST' : 'GET'),
                 headers: this.orsRequestBody ? {
                     'Content-Type': 'application/json'
-                } : {},
-                body: this.orsRequestBody || null
+                } : (this.valhallaRequestBody ? {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                } : {}),
+                body: this.orsRequestBody || this.valhallaRequestBody || null,
+                mode: 'cors'
             });
             
-            // Clear request body after use
+            // Clear request bodies after use
             this.orsRequestBody = null;
+            this.valhallaRequestBody = null;
+            this.valhallaMethod = null;
             
             const data = await response.json();
             console.log(`🌐 API Response:`, data);
@@ -1690,7 +1705,17 @@ class BikeRoutePlanner {
             }
         } catch (error) {
             console.error('Route generation error:', error);
-            this.showNotification('Failed to generate route: ' + error.message, 'error');
+            
+            // Handle CORS errors specifically
+            if (error.message && error.message.includes('CORS')) {
+                console.error('❌ CORS Error: Unable to access API due to Cross-Origin policy');
+                this.showNotification('CORS error: Unable to connect to routing API. Try using a different API or running locally.', 'error');
+            } else if (error.message && error.message.includes('Failed to fetch')) {
+                console.error('❌ Network Error: Unable to fetch from API');
+                this.showNotification('Network error: Unable to connect to routing API. Check your internet connection.', 'error');
+            } else {
+                this.showNotification('Failed to generate route. Please try again.', 'error');
+            }
         }
     }
     
