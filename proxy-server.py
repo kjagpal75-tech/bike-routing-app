@@ -10,6 +10,10 @@ import urllib.parse
 import json
 import os
 import mimetypes
+import ssl
+
+# Create SSL context that doesn't verify certificates (for development)
+ssl._create_default_https_context = ssl._create_unverified_context
 
 class ProxyHandler(BaseHTTPRequestHandler):
     def do_GET(self):
