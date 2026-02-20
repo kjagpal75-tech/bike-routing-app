@@ -1849,6 +1849,24 @@ class BikeRoutePlanner {
                 
                 console.log('🛣️ About to display route with routePoints:', routePoints.length, 'points');
                 console.log('🛣️ routePoints sample:', routePoints.slice(0, 3));
+                console.log('🛣️ routePoints type:', typeof routePoints[0]);
+                console.log('🛣️ routePoints[0] lat/lng:', routePoints[0] ? [routePoints[0].lat, routePoints[0].lng] : 'undefined');
+                
+                // Validate routePoints before display
+                if (!routePoints || routePoints.length === 0) {
+                    console.error('❌ No valid routePoints for display');
+                    return;
+                }
+                
+                // Check if first point has valid coordinates
+                const firstPoint = routePoints[0];
+                if (!firstPoint || typeof firstPoint.lat !== 'number' || typeof firstPoint.lng !== 'number') {
+                    console.error('❌ Invalid coordinates in routePoints:', firstPoint);
+                    return;
+                }
+                
+                console.log('🛣️ Validating bounds with first point:', firstPoint);
+                console.log('🛣️ Validating bounds with last point:', routePoints[routePoints.length - 1]);
                 
                 this.displayRoute(routePoints, route);
                 
