@@ -1796,6 +1796,8 @@ class BikeRoutePlanner {
                         // Valhalla API returns trip structure with legs
                         const trip = data.trip;
                         
+                        console.log('🛣️ Full Valhalla response:', JSON.stringify(trip, null, 2));
+                        
                         // Create a consistent route structure for the app
                         route = {
                             legs: trip.legs,
@@ -1816,6 +1818,7 @@ class BikeRoutePlanner {
                             console.log('🛣️ Last point:', routePoints[routePoints.length - 1]);
                         } else {
                             console.log('🛣️ No shape data in Valhalla response');
+                            console.log('🛣️ Available keys in trip:', Object.keys(trip));
                             routePoints = [];
                         }
                         routeFound = true;
