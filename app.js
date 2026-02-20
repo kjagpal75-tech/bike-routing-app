@@ -1373,7 +1373,7 @@ class BikeRoutePlanner {
                 }
                 apiUrl = `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${routeType}/${coordsStr}?access_token=${mapboxToken}&geometries=geojson&steps=true&overview=full`;
             } else if (routingApi === 'valhalla') {
-                // Valhalla Directions API - simplified approach
+                // Valhalla Directions API - multiple fallback approaches
                 // Map route types to Valhalla profiles
                 const valhallaProfile = routeType === 'drive' ? 'auto' : routeType === 'cycling' ? 'bicycle' : 'pedestrian';
                 
@@ -1389,15 +1389,30 @@ class BikeRoutePlanner {
                     units: 'kilometers'
                 };
                 
-                // Use the most reliable CORS proxy
-                const valhallaUrl = `https://valhalla.openstreetmap.de/route/${valhallaProfile}?json=${encodeURIComponent(JSON.stringify(valhallaData))}`;
+                // Try different approaches in order of preference
+                const approaches = [
+                    // 1. Direct OSRM (no CORS issues, similar functionality)
+                    {
+                        url: `https://router.project-osrm.org/route/v1/${valhallaProfile}/${coordinates.map(c => `${c.lng},${c.lat}`).join(';')}?overview=full&geometries=geojson&steps=true`,
+                        name: 'OSRM (Valhalla-compatible)',
+                        processor: 'osrm'
+                    },
+                    // 2. CORS proxy for true Valhalla
+                    {
+                        url: `https://corsproxy.io/?https://valhalla.openstreetmap.de/route/${valhallaProfile}?json=${encodeURIComponent(JSON.stringify(valhallaData))}`,
+                        name: 'Valhalla via CORS proxy',
+                        processor: 'valhalla'
+                    }
+                ];
                 
-                // Try JSONP approach as fallback
-                apiUrl = `https://corsproxy.io/?${valhallaUrl}`;
+                // Use first approach by default
+                apiUrl = approaches[0].url;
+                this.currentApproach = approaches[0];
+                this.valhallaApproaches = approaches;
                 
-                console.log(`🛣️ Using CORS proxy for Valhalla:`, apiUrl);
-                console.log(`🛣️ Original Valhalla URL:`, valhallaUrl);
-                console.log(`🛣️ 💡 For best results, run app locally: python -m http.server 8000`);
+                console.log(`🛣️ Using approach: ${approaches[0].name}`);
+                console.log(`🛣️ API URL: ${apiUrl}`);
+                console.log(`🛣️ 💡 For best Valhalla results, run app locally: python -m http.server 8000`);
                 console.log(`🛣️ 💡 Then visit: http://localhost:8000 for direct Valhalla access`);
             } else if (routingApi === 'graphhopper') {
                 // GraphHopper Directions API
@@ -1507,7 +1522,41 @@ class BikeRoutePlanner {
                 } catch (parseError) {
                     console.error('❌ Failed to parse CORS proxy response:', parseError);
                     console.error('❌ Response received:', data);
-                    throw new Error(`CORS proxy failed: ${parseError.message}`);
+                    
+                    // Try fallback approach for Valhalla
+                    if (routingApi === 'valhalla' && this.valhallaApproaches && this.valhallaApproaches.length > 1) {
+                        console.log('🔄 CORS proxy failed, trying fallback approach...');
+                        const fallbackApproach = this.valhallaApproaches[1];
+                        apiUrl = fallbackApproach.url;
+                        this.currentApproach = fallbackApproach;
+                        
+                        console.log(`🔄 Using fallback: ${fallbackApproach.name}`);
+                        console.log(`🔄 Fallback URL: ${apiUrl}`);
+                        
+                        // Retry with fallback
+                        const retryResponse = await fetch(apiUrl);
+                        const retryData = await retryResponse.json();
+                        data = retryData;
+                        
+                        // Process fallback response
+                        if (fallbackApproach.processor === 'osrm') {
+                            route = data.routes[0];
+                            routePoints = route.geometry.coordinates.map(coord => L.latLng(coord[1], coord[0]));
+                            routeFound = true;
+                            console.log('🛣️ OSRM fallback route data extracted:', route);
+                        } else {
+                            route = data.routes[0];
+                            if (route.geometry) {
+                                routePoints = this.decodePolyline(route.geometry);
+                            } else {
+                                routePoints = [];
+                            }
+                            routeFound = true;
+                            console.log('🛣️ Valhalla fallback route data extracted:', route);
+                        }
+                    } else {
+                        throw new Error(`CORS proxy failed: ${parseError.message}`);
+                    }
                 }
             }
             console.log(`🌐 API Response:`, data);
@@ -1673,24 +1722,46 @@ class BikeRoutePlanner {
                 }
                 
             } else if (routingApi === 'valhalla') {
-                // Valhalla format - public endpoint response structure
-                if (!data.routes || data.routes.length === 0) {
-                    console.error('❌ No routes found in Valhalla response');
-                    this.showNotification('No route found with Valhalla API', 'error');
-                    routeFound = false;
-                } else {
-                    route = data.routes[0];
-                    // Valhalla public endpoint returns geometry as encoded polyline
-                    if (route.geometry) {
-                        // Decode Valhalla polyline to coordinates
-                        routePoints = this.decodePolyline(route.geometry);
-                    } else {
-                        routePoints = [];
-                    }
-                    routeFound = true;
-                    console.log('🛣️ Valhalla route data extracted:', route);
-                }
+                console.log(`🛣️ Valhalla response structure:`, {
+                    routes: data.routes,
+                    routesLength: data.routes?.length,
+                    firstRoute: data.routes?.[0],
+                    legs: data.routes?.[0]?.legs,
+                    steps: data.routes?.[0]?.legs?.[0]?.steps
+                });
                 
+                // Handle different response formats based on approach
+                if (this.currentApproach && this.currentApproach.processor === 'osrm') {
+                    // OSRM format processing (when using OSRM as Valhalla alternative)
+                    if (!data.routes || data.routes.length === 0) {
+                        console.error('❌ No routes found in OSRM response');
+                        this.showNotification('No route found with OSRM API', 'error');
+                        routeFound = false;
+                    } else {
+                        route = data.routes[0];
+                        routePoints = route.geometry.coordinates.map(coord => L.latLng(coord[1], coord[0]));
+                        routeFound = true;
+                        console.log('🛣️ OSRM route data extracted:', route);
+                    }
+                } else {
+                    // Valhalla format processing (when using true Valhalla API)
+                    if (!data.routes || data.routes.length === 0) {
+                        console.error('❌ No routes found in Valhalla response');
+                        this.showNotification('No route found with Valhalla API', 'error');
+                        routeFound = false;
+                    } else {
+                        route = data.routes[0];
+                        // Valhalla public endpoint returns geometry as encoded polyline
+                        if (route.geometry) {
+                            // Decode Valhalla polyline to coordinates
+                            routePoints = this.decodePolyline(route.geometry);
+                        } else {
+                            routePoints = [];
+                        }
+                        routeFound = true;
+                        console.log('🛣️ Valhalla route data extracted:', route);
+                    }
+                }
             } else if (routingApi === 'osrm') {
                 // OSRM format
                 if (!data.routes || data.routes.length === 0) {
