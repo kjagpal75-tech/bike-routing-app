@@ -1391,17 +1391,17 @@ class BikeRoutePlanner {
                 
                 // Try different approaches in order of preference
                 const approaches = [
-                    // 1. Direct OSRM (no CORS issues, similar functionality)
-                    {
-                        url: `https://router.project-osrm.org/route/v1/${valhallaProfile}/${coordinates.map(c => `${c.lng},${c.lat}`).join(';')}?overview=full&geometries=geojson&steps=true`,
-                        name: 'OSRM (Valhalla-compatible)',
-                        processor: 'osrm'
-                    },
-                    // 2. CORS proxy for true Valhalla
+                    // 1. True Valhalla API via CORS proxy (authentic routing)
                     {
                         url: `https://corsproxy.io/?https://valhalla.openstreetmap.de/route/${valhallaProfile}?json=${encodeURIComponent(JSON.stringify(valhallaData))}`,
-                        name: 'Valhalla via CORS proxy',
+                        name: 'Valhalla (authentic routing)',
                         processor: 'valhalla'
+                    },
+                    // 2. Direct OSRM (fallback, no CORS issues but different routing)
+                    {
+                        url: `https://router.project-osrm.org/route/v1/${valhallaProfile}/${coordinates.map(c => `${c.lng},${c.lat}`).join(';')}?overview=full&geometries=geojson&steps=true`,
+                        name: 'OSRM (fallback - different routing)',
+                        processor: 'osrm'
                     }
                 ];
                 
@@ -1412,8 +1412,10 @@ class BikeRoutePlanner {
                 
                 console.log(`🛣️ Using approach: ${approaches[0].name}`);
                 console.log(`🛣️ API URL: ${apiUrl}`);
-                console.log(`🛣️ 💡 For best Valhalla results, run app locally: python -m http.server 8000`);
+                console.log(`🛣️ 💡 For authentic Valhalla routing via Morrison Canyon Road:`);
+                console.log(`🛣️ 💡 Run locally: python -m http.server 8000`);
                 console.log(`🛣️ 💡 Then visit: http://localhost:8000 for direct Valhalla access`);
+                console.log(`🛣️ 💡 Local bypasses CORS and gives true Valhalla routing preferences`);
             } else if (routingApi === 'graphhopper') {
                 // GraphHopper Directions API
                 const graphhopperToken = this.getGraphhopperToken();
@@ -1525,7 +1527,10 @@ class BikeRoutePlanner {
                     
                     // Try fallback approach for Valhalla
                     if (routingApi === 'valhalla' && this.valhallaApproaches && this.valhallaApproaches.length > 1) {
-                        console.log('🔄 CORS proxy failed, trying fallback approach...');
+                        console.log('🔄 CORS proxy failed, trying OSRM fallback...');
+                        console.log('🔄 Note: OSRM uses different routing preferences than Valhalla');
+                        console.log('🔄 For authentic Valhalla routing (Morrison Canyon Road), run app locally');
+                        
                         const fallbackApproach = this.valhallaApproaches[1];
                         apiUrl = fallbackApproach.url;
                         this.currentApproach = fallbackApproach;
@@ -1544,6 +1549,7 @@ class BikeRoutePlanner {
                             routePoints = route.geometry.coordinates.map(coord => L.latLng(coord[1], coord[0]));
                             routeFound = true;
                             console.log('🛣️ OSRM fallback route data extracted:', route);
+                            console.log('🛣️ OSRM may use different roads than Valhalla');
                         } else {
                             route = data.routes[0];
                             if (route.geometry) {
@@ -1555,6 +1561,8 @@ class BikeRoutePlanner {
                             console.log('🛣️ Valhalla fallback route data extracted:', route);
                         }
                     } else {
+                        console.error('❌ All Valhalla approaches failed');
+                        this.showNotification('Valhalla routing failed. For authentic Valhalla routing via Morrison Canyon Road, run app locally: python -m http.server 8000', 'error');
                         throw new Error(`CORS proxy failed: ${parseError.message}`);
                     }
                 }
