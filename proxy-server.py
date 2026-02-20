@@ -42,20 +42,27 @@ class ProxyHandler(BaseHTTPRequestHandler):
     
     def serve_static_file(self):
         try:
+            # Get the directory where the script is located
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            
             # Determine file path
             if self.path == '/':
-                file_path = 'index.html'
+                file_path = os.path.join(script_dir, 'index.html')
             else:
-                file_path = self.path.lstrip('/')
+                file_path = os.path.join(script_dir, self.path.lstrip('/'))
             
             # Security check - prevent directory traversal
-            if '..' in file_path or file_path.startswith('/'):
+            if '..' in file_path or not file_path.startswith(script_dir):
                 self.send_error(403, "Forbidden")
                 return
             
+            # Debug logging
+            print(f"📁 Serving file: {file_path}")
+            print(f"📁 File exists: {os.path.exists(file_path)}")
+            
             # Check if file exists
             if not os.path.exists(file_path):
-                self.send_error(404, "File not found")
+                self.send_error(404, f"File not found: {file_path}")
                 return
             
             # Get MIME type
@@ -90,4 +97,5 @@ if __name__ == '__main__':
     print(f"🚀 Proxy server running on http://localhost:{port}")
     print("🛣️ Valhalla API proxied at /valhalla/")
     print("🌐 App available at http://localhost:{port}")
+    print(f"📁 Serving files from: {os.path.dirname(os.path.abspath(__file__))}")
     server.serve_forever()
