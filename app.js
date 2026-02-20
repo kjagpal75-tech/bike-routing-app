@@ -1390,8 +1390,17 @@ class BikeRoutePlanner {
                 };
                 
                 // Try different approaches in order of preference
+                // Check if running locally - if so, use direct Valhalla access
+                const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+                
                 const approaches = [
-                    // 1. Try multiple CORS proxies for true Valhalla API
+                    // 1. Direct Valhalla API (when running locally - no CORS issues)
+                    ...(isLocalhost ? [{
+                        url: `https://valhalla.openstreetmap.de/route/${valhallaProfile}?json=${encodeURIComponent(JSON.stringify(valhallaData))}`,
+                        name: 'Valhalla (direct local access)',
+                        processor: 'valhalla'
+                    }] : []),
+                    // 2. CORS proxies for true Valhalla API (when running on GitHub Pages)
                     {
                         url: `https://corsproxy.io/?https://valhalla.openstreetmap.de/route/${valhallaProfile}?json=${encodeURIComponent(JSON.stringify(valhallaData))}`,
                         name: 'Valhalla (authentic routing) - corsproxy.io',
@@ -1402,7 +1411,7 @@ class BikeRoutePlanner {
                         name: 'Valhalla (authentic routing) - allorigins',
                         processor: 'valhalla'
                     },
-                    // 2. Direct OSRM (fallback, no CORS issues but different routing)
+                    // 3. Direct OSRM (fallback, no CORS issues but different routing)
                     {
                         url: `https://router.project-osrm.org/route/v1/${valhallaProfile}/${coordinates.map(c => `${c.lng},${c.lat}`).join(';')}?overview=full&geometries=geojson&steps=true`,
                         name: 'OSRM (fallback - different routing)',
@@ -1417,10 +1426,15 @@ class BikeRoutePlanner {
                 
                 console.log(`🛣️ Using approach: ${approaches[0].name}`);
                 console.log(`🛣️ API URL: ${apiUrl}`);
-                console.log(`🛣️ 💡 For authentic Valhalla routing via Morrison Canyon Road:`);
-                console.log(`🛣️ 💡 Run locally: python -m http.server 8000`);
-                console.log(`🛣️ 💡 Then visit: http://localhost:8000 for direct Valhalla access`);
-                console.log(`🛣️ 💡 Local bypasses CORS and gives true Valhalla routing preferences`);
+                if (isLocalhost) {
+                    console.log(`🛣️ 🎉 Running locally - direct Valhalla access (no CORS issues!)`);
+                    console.log(`🛣️ 🛣️ Authentic routing via Morrison Canyon Road available!`);
+                } else {
+                    console.log(`🛣️ 💡 For authentic Valhalla routing via Morrison Canyon Road:`);
+                    console.log(`🛣️ 💡 Run locally: python -m http.server 8000`);
+                    console.log(`🛣️ 💡 Then visit: http://localhost:8000 for direct Valhalla access`);
+                    console.log(`🛣️ 💡 Local bypasses CORS and gives true Valhalla routing preferences`);
+                }
             } else if (routingApi === 'graphhopper') {
                 // GraphHopper Directions API
                 const graphhopperToken = this.getGraphhopperToken();
