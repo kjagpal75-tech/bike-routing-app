@@ -1373,11 +1373,11 @@ class BikeRoutePlanner {
                 }
                 apiUrl = `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${routeType}/${coordsStr}?access_token=${mapboxToken}&geometries=geojson&steps=true&overview=full`;
             } else if (routingApi === 'valhalla') {
-                // Valhalla Directions API - using CORS-friendly endpoint
+                // Valhalla Directions API - using CORS proxy
                 // Map route types to Valhalla profiles
                 const valhallaProfile = routeType === 'drive' ? 'auto' : routeType === 'cycling' ? 'bicycle' : 'pedestrian';
                 
-                // Try different CORS-friendly approaches
+                // Build the JSON data
                 const valhallaData = {
                     locations: coordinates.map(coord => ({
                         lat: coord.lat,
@@ -1389,14 +1389,13 @@ class BikeRoutePlanner {
                     units: 'kilometers'
                 };
                 
-                // Use JSONP-like approach with CORS proxy
-                const valhallaUrl = `https://valhalla.openstreetmap.de/route/${valhallaProfile}`;
+                // Use a reliable CORS proxy
+                const valhallaUrl = `https://valhalla.openstreetmap.de/route/${valhallaProfile}?json=${encodeURIComponent(JSON.stringify(valhallaData))}`;
                 
-                // Use fetch with mode 'cors' and proper headers
-                apiUrl = valhallaUrl;
-                this.valhallaRequestBody = JSON.stringify(valhallaData);
-                this.valhallaMethod = 'POST';
-                console.log(`🛣️ Using Valhalla with CORS handling:`, apiUrl);
+                // Try multiple CORS proxy approaches
+                apiUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(valhallaUrl)}`;
+                console.log(`🛣️ Using CORS proxy for Valhalla:`, apiUrl);
+                console.log(`🛣️ Original Valhalla URL:`, valhallaUrl);
             } else if (routingApi === 'graphhopper') {
                 // GraphHopper Directions API
                 const graphhopperToken = this.getGraphhopperToken();
@@ -1472,23 +1471,30 @@ class BikeRoutePlanner {
             
             console.log(`🌐 API URL: ${apiUrl}`);
             const response = await fetch(apiUrl, {
-                method: this.orsRequestBody ? 'POST' : (this.valhallaRequestBody ? 'POST' : 'GET'),
+                method: this.orsRequestBody ? 'POST' : 'GET',
                 headers: this.orsRequestBody ? {
                     'Content-Type': 'application/json'
-                } : (this.valhallaRequestBody ? {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                } : {}),
-                body: this.orsRequestBody || this.valhallaRequestBody || null,
+                } : {},
+                body: this.orsRequestBody || null,
                 mode: 'cors'
             });
             
-            // Clear request bodies after use
+            // Clear request body after use
             this.orsRequestBody = null;
-            this.valhallaRequestBody = null;
-            this.valhallaMethod = null;
             
-            const data = await response.json();
+            let data = await response.json();
+            
+            // Handle CORS proxy response
+            if (apiUrl.includes('api.allorigins.win')) {
+                try {
+                    // The proxy wraps the response
+                    data = typeof data.contents === 'string' ? JSON.parse(data.contents) : data.contents;
+                    console.log(`🛣️ CORS proxy response parsed:`, data);
+                } catch (parseError) {
+                    console.error('❌ Failed to parse CORS proxy response:', parseError);
+                    throw new Error('CORS proxy response parsing failed');
+                }
+            }
             console.log(`🌐 API Response:`, data);
             console.log(`🌐 Response keys:`, Object.keys(data));
             
