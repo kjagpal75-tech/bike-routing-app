@@ -706,7 +706,7 @@ class BikeRoutePlanner {
             const dlng = ((result & 1) ? ~(result >> 1) : (result >> 1));
             lng += dlng;
             
-            points.push([lat / 1e6, lng / 1e6]);
+            points.push([lat / 1e5, lng / 1e5]);
         }
         
         const endLocationBtn = document.getElementById('endLocationBtn');
@@ -1421,17 +1421,8 @@ class BikeRoutePlanner {
             console.log(`🌐 Using routing API: ${routingApi}`);
             console.log(`🔄 Return to start: ${returnToStart}`);
             
-            getRouteTypeDescription(routeType) {
-        const descriptions = {
-            'drive': '🚗 Road Cycling (Paved Roads) - Best for road bikes and fast routes',
-            'cycling': '🚴 Trail Cycling (MTB Paths) - Best for mountain bikes and trails',
-            'foot': '🚶 Walking Routes - Pedestrian paths and sidewalks only'
-        };
-        return descriptions[routeType] || '🚗 Road Cycling (Paved Roads)';
-    }
-            
             // Provide information about route type
-            const routeTypeInfo = getRouteTypeDescription(routeType);
+            const routeTypeInfo = this.getRouteTypeDescription(routeType);
             if (routeType === 'drive') {
                 console.log('🛣️ Using ROAD profile - Paved roads only, recommended for road bikes');
             } else if (routeType === 'cycling') {
@@ -1453,7 +1444,7 @@ class BikeRoutePlanner {
             } else if (routingApi === 'valhalla') {
                 // Valhalla Directions API - multiple fallback approaches
                 // Map route types to Valhalla profiles
-                const valhallaProfile = routeType === 'cycling' ? 'bicycle' : routeType === 'drive' ? 'auto' : 'pedestrian';
+                const valhallaProfile = routeType === 'drive' ? 'auto' : routeType === 'cycling' ? 'bicycle' : 'pedestrian';
                 
                 // Build the JSON data
                 const valhallaData = {
@@ -1516,17 +1507,14 @@ class BikeRoutePlanner {
                 window.updateDebugPanel('API', approaches[0].name.includes('proxy') ? 'LOCAL' : 'DIRECT');
                 
                 if (approaches[0].name.includes('Valhalla')) {
-                    console.log(`🛣️ 🎉 Using working Valhalla API with ${valhallaProfile} profile!`);
+                    console.log(`🛣️ 🎉 Using working Valhalla API with Morrison Canyon Road routing!`);
                     console.log(`🛣️ 🛣️ Authentic Valhalla routing preferences available!`);
-                    if (approaches[0].name.includes('direct')) {
-                        console.log(`🛣️ 💡 Using direct Valhalla API (no rate limiting)`);
-                        window.updateDebugPanel('PROXY', 'DIRECT');
-                    } else if (isLocalhost && isPort8000) {
+                    if (isLocalhost && isPort8000) {
                         console.log(`🛣️ 💡 Using local proxy on port 8000 for direct API access!`);
                         window.updateDebugPanel('PROXY', 'PORT 8000');
                     } else {
-                        console.log(`🛣️ 💡 Using CORS proxy for API access`);
-                        window.updateDebugPanel('PROXY', 'CORS_PROXY');
+                        console.log(`🛣️ 💡 Using direct Valhalla API (no proxy needed)`);
+                        window.updateDebugPanel('PROXY', 'DIRECT');
                     }
                 } else {
                     console.log(`🛣️ 💡 For best results, run locally: python3 proxy-server.py`);
@@ -2080,21 +2068,7 @@ class BikeRoutePlanner {
             console.log(`    Has lng:`, 'lng' in point);
             console.log(`    lat:`, point.lat);
             console.log(`    lng:`, point.lng);
-            console.log(`    lat type:`, typeof point.lat);
-            console.log(`    lng type:`, typeof point.lng);
-            console.log(`    lat value:`, point.lat, typeof point.lat === 'number' ? '✅ number' : '❌ not number');
-            console.log(`    lng value:`, point.lng, typeof point.lng === 'number' ? '✅ number' : '❌ not number');
         }
-        
-        // Check if coordinates are in reasonable range for California
-        const firstPoint = routePoints[0];
-        const lastPoint = routePoints[routePoints.length - 1];
-        console.log('🗺️ Coordinate range check:');
-        console.log(`  First point: lat=${firstPoint.lat}, lng=${firstPoint.lng}`);
-        console.log(`  Last point: lat=${lastPoint.lat}, lng=${lastPoint.lng}`);
-        console.log(`  Expected California: lat 32-42, lng -125-114`);
-        console.log(`  First point in California?`, firstPoint.lat >= 32 && firstPoint.lat <= 42 && firstPoint.lng >= -125 && firstPoint.lng <= -114 ? '✅ YES' : '❌ NO');
-        console.log(`  Last point in California?`, lastPoint.lat >= 32 && lastPoint.lat <= 42 && lastPoint.lng >= -125 && lastPoint.lng <= -114 ? '✅ YES' : '❌ NO');
         
         this.routeLayer = L.polyline(routePoints, {
             color: routeColor,
@@ -2122,33 +2096,29 @@ class BikeRoutePlanner {
             console.log('🗺️ Bounds size:', bounds.getSize());
         } else {
             console.log('🗺️ Bounds has no getSize method, using manual calculation');
-            // Manual bounds calculation - create proper LatLngBounds object
+            // Manual bounds calculation
             const firstPoint = routePoints[0];
             const lastPoint = routePoints[routePoints.length - 1];
+            const manualBounds = {
+                getCenter: () => L.latLng(
+                    (firstPoint.lat + lastPoint.lat) / 2,
+                    (firstPoint.lng + lastPoint.lng) / 2
+                ),
+                getNorthEast: () => L.latLng(lastPoint.lat, lastPoint.lng),
+                getSouthWest: () => L.latLng(firstPoint.lat, firstPoint.lng)
+            };
+            console.log('🗺️ Manual bounds center:', manualBounds.getCenter());
             
-            // Create proper LatLngBounds object
             try {
-                const southWest = L.latLng(
-                    Math.min(firstPoint.lat, lastPoint.lat),
-                    Math.min(firstPoint.lng, lastPoint.lng)
-                );
-                const northEast = L.latLng(
-                    Math.max(firstPoint.lat, lastPoint.lat),
-                    Math.max(firstPoint.lng, lastPoint.lng)
-                );
-                const manualBounds = L.latLngBounds(southWest, northEast);
-                
-                console.log('🗺️ Manual bounds created:', manualBounds);
-                console.log('🗺️ Manual bounds center:', manualBounds.getCenter());
-                console.log('🗺️ Manual bounds type:', typeof manualBounds);
-                console.log('🗺️ Manual bounds constructor:', manualBounds.constructor.name);
-                
                 this.map.fitBounds(manualBounds, { padding: [50, 50] });
                 console.log('🗺️ Map bounds fitted successfully (manual)');
                 window.updateDebugPanel('MAP_RENDER', 'SUCCESS_MANUAL');
-            } catch (boundsError) {
-                console.error('🗺️ Error creating manual bounds:', boundsError);
-                window.updateDebugPanel('MAP_ERROR', 'BOUNDS_CREATE_ERROR');
+            } catch (error) {
+                console.error('🗺️ Error fitting bounds:', error);
+                console.error('🗺️ Manual bounds object:', manualBounds);
+                console.error('🗺️ Manual bounds type:', typeof manualBounds);
+                console.error('🗺️ Map object:', this.map);
+                window.updateDebugPanel('MAP_ERROR', 'BOUNDS_ERROR_MANUAL');
                 
                 // Try a simple center point instead of bounds
                 try {
