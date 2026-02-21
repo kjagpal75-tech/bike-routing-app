@@ -9,6 +9,12 @@ if (debugIndicator) {
     debugIndicator.style.background = 'green';
 }
 
+// Wait for DOM to be ready before initializing
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('🚀 DOM ready, initializing BikeRoutePlanner');
+    new BikeRoutePlanner();
+});
+
 class BikeRoutePlanner {
     constructor() {
         console.log('🚴 Bike Route Planner for Road Cycling Initialized');
@@ -2584,12 +2590,10 @@ class BikeRoutePlanner {
     }
 }
 
-// Initialize app when DOM is ready
+// Add test button for specific route
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 DOM loaded, initializing Bike Route Planner...');
-    window.app = new BikeRoutePlanner();
+    console.log('🚀 DOM loaded, adding test button...');
     
-    // Add test button for specific route
     setTimeout(() => {
         const testButton = document.createElement('button');
         testButton.textContent = '🧪 Test Fremont Route';
