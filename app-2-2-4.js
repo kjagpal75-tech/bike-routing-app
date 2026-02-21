@@ -1441,13 +1441,13 @@ class BikeRoutePlanner {
                     units: 'kilometers'
                 };
                 
-                // Try different approaches in order of preference
                 // Check if running locally - if so, use local proxy for direct Valhalla access
                 const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+                const isPort8000 = window.location.port === '8000';
                 
                 const approaches = [
                     // 1. Local proxy for Valhalla API (using working valhalla1 endpoint)
-                    ...(isLocalhost ? [{
+                    ...(isLocalhost && isPort8000 ? [{
                         url: `/valhalla/route?json=${encodeURIComponent(JSON.stringify(valhallaData))}`,
                         name: 'Valhalla (local proxy - working API)',
                         processor: 'valhalla',
@@ -1468,7 +1468,7 @@ class BikeRoutePlanner {
                         processor: 'valhalla',
                         method: 'GET'
                     },
-                    // 3. Direct OSRM (fallback, no CORS issues but different routing)
+                    // 4. Direct OSRM (fallback, no CORS issues but different routing)
                     {
                         url: `https://router.project-osrm.org/route/v1/${valhallaProfile}/${coordinates.map(c => `${c.lng},${c.lat}`).join(';')}?overview=full&geometries=geojson&steps=true`,
                         name: 'OSRM (fallback - different routing)',
@@ -1487,8 +1487,10 @@ class BikeRoutePlanner {
                 if (approaches[0].name.includes('Valhalla')) {
                     console.log(`🛣️ 🎉 Using working Valhalla API with Morrison Canyon Road routing!`);
                     console.log(`🛣️ 🛣️ Authentic Valhalla routing preferences available!`);
-                    if (isLocalhost) {
-                        console.log(`🛣️ 💡 If proxy server not running, use: python3 proxy-server.py`);
+                    if (isLocalhost && isPort8000) {
+                        console.log(`🛣️ 💡 Using local proxy on port 8000 for direct API access!`);
+                    } else {
+                        console.log(`🛣️ 💡 Using direct Valhalla API (no proxy needed)`);
                     }
                 } else {
                     console.log(`🛣️ 💡 For best results, run locally: python3 proxy-server.py`);
