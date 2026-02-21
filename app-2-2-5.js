@@ -1457,11 +1457,22 @@ class BikeRoutePlanner {
                 }
                 apiUrl = `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${routeType}/${coordsStr}?access_token=${mapboxToken}&geometries=geojson&steps=true&overview=full`;
             } else if (routingApi === 'valhalla') {
-                // Valhalla Directions API - multiple fallback approaches
-                // Map route types to Valhalla profiles
-                const valhallaProfile = routeType === 'drive' ? 'auto' : routeType === 'cycling' ? 'bicycle' : 'pedestrian';
+                // Valhalla API approach selection with rate limiting fallback
+                const valhallaProfile = this.getValhallaProfile(routeType);
+                const start = this.startMarker.getLatLng();
+                const end = this.endMarker.getLatLng();
+                const waypoints = this.waypoints.map(w => w.latlng);
                 
-                // Build the JSON data
+                const coordinates = [
+                    { lat: start.lat, lng: start.lng },
+                    { lat: end.lat, lng: end.lng }
+                ];
+                
+                // Add waypoints if any
+                waypoints.forEach(waypoint => {
+                    coordinates.push({ lat: waypoint.lat, lng: waypoint.lng });
+                });
+                
                 const valhallaData = {
                     locations: coordinates.map(coord => ({
                         lat: coord.lat,
@@ -1478,7 +1489,14 @@ class BikeRoutePlanner {
                 const isPort8000 = window.location.port === '8000';
                 
                 const approaches = [
-                    // 1. Local proxy for Valhalla API (using working valhalla1 endpoint)
+                    // 1. Direct Valhalla1 API (working endpoint, no rate limiting)
+                    {
+                        url: `https://valhalla1.openstreetmap.de/route?json=${encodeURIComponent(JSON.stringify(valhallaData))}`,
+                        name: 'Valhalla (direct API - Morrison Canyon Road)',
+                        processor: 'valhalla',
+                        method: 'GET'
+                    },
+                    // 2. Local proxy for Valhalla API (using working valhalla1 endpoint)
                     ...(isLocalhost && isPort8000 ? [{
                         url: `/valhalla/route?json=${encodeURIComponent(JSON.stringify(valhallaData))}`,
                         name: 'Valhalla (local proxy - working API)',
@@ -1486,13 +1504,6 @@ class BikeRoutePlanner {
                         method: 'GET',
                         body: null
                     }] : []),
-                    // 2. Direct Valhalla1 API (working endpoint, no proxy needed)
-                    {
-                        url: `https://valhalla1.openstreetmap.de/route?json=${encodeURIComponent(JSON.stringify(valhallaData))}`,
-                        name: 'Valhalla (direct API - Morrison Canyon Road)',
-                        processor: 'valhalla',
-                        method: 'GET'
-                    },
                     // 3. CORS proxies for Valhalla API (using correct endpoint)
                     {
                         url: `https://corsproxy.io/?https://valhalla1.openstreetmap.de/route?json=${encodeURIComponent(JSON.stringify(valhallaData))}`,
@@ -1524,12 +1535,15 @@ class BikeRoutePlanner {
                 if (approaches[0].name.includes('Valhalla')) {
                     console.log(`🛣️ 🎉 Using working Valhalla API with Morrison Canyon Road routing!`);
                     console.log(`🛣️ 🛣️ Authentic Valhalla routing preferences available!`);
-                    if (isLocalhost && isPort8000) {
+                    if (approaches[0].name.includes('direct')) {
+                        console.log(`🛣️ 💡 Using direct Valhalla API (no rate limiting)`);
+                        window.updateDebugPanel('PROXY', 'DIRECT');
+                    } else if (isLocalhost && isPort8000) {
                         console.log(`🛣️ 💡 Using local proxy on port 8000 for direct API access!`);
                         window.updateDebugPanel('PROXY', 'PORT 8000');
                     } else {
-                        console.log(`🛣️ 💡 Using direct Valhalla API (no proxy needed)`);
-                        window.updateDebugPanel('PROXY', 'DIRECT');
+                        console.log(`🛣️ 💡 Using CORS proxy for API access`);
+                        window.updateDebugPanel('PROXY', 'CORS_PROXY');
                     }
                 } else {
                     console.log(`🛣️ 💡 For best results, run locally: python3 proxy-server.py`);
