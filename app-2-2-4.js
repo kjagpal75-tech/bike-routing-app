@@ -2060,6 +2060,18 @@ class BikeRoutePlanner {
         console.log('🗺️ Creating polyline with', routePoints.length, 'points');
         console.log('🗺️ Route color:', routeColor);
         
+        // Debug: Check first few route points
+        console.log('🗺️ First 3 route points:');
+        for (let i = 0; i < Math.min(3, routePoints.length); i++) {
+            const point = routePoints[i];
+            console.log(`  Point ${i}:`, point);
+            console.log(`    Type:`, typeof point);
+            console.log(`    Has lat:`, 'lat' in point);
+            console.log(`    Has lng:`, 'lng' in point);
+            console.log(`    lat:`, point.lat);
+            console.log(`    lng:`, point.lng);
+        }
+        
         this.routeLayer = L.polyline(routePoints, {
             color: routeColor,
             weight: routeWeight,
@@ -2070,12 +2082,23 @@ class BikeRoutePlanner {
         console.log('🗺️ Route layer added to map');
         window.updateDebugPanel('MAP_RENDER', 'SUCCESS');
         
+        // Debug: Check if layer was added correctly
+        console.log('🗺️ Route layer exists:', !!this.routeLayer);
+        console.log('🗺️ Route layer on map:', this.routeLayer && this.routeLayer._map ? 'YES' : 'NO');
+        
         // Fit map to show entire route
         const bounds = L.latLngBounds(routePoints);
         console.log('🗺️ Fitting map to bounds:', bounds);
-        this.map.fitBounds(bounds, { padding: [50, 50] });
+        console.log('🗺️ Bounds center:', bounds.getCenter());
+        console.log('🗺️ Bounds size:', bounds.getSize());
         
-        console.log('🗺️ Map bounds fitted successfully');
+        try {
+            this.map.fitBounds(bounds, { padding: [50, 50] });
+            console.log('🗺️ Map bounds fitted successfully');
+        } catch (error) {
+            console.error('🗺️ Error fitting bounds:', error);
+            window.updateDebugPanel('MAP_ERROR', 'BOUNDS_ERROR');
+        }
         
         // Show route info panel
         const routeInfoDiv = document.getElementById('routeInfo');
