@@ -2000,14 +2000,8 @@ class BikeRoutePlanner {
         } catch (error) {
             console.error('Route generation error:', error);
             
-            // Show user-friendly error message instead of auto-fallback
-            if (error.message && error.message.includes('429')) {
-                this.showNotification('⚠️ Rate limit exceeded. Please try again in a few minutes or select a different routing API.', 'warning');
-            } else if (error.message && error.message.includes('Unexpected token')) {
-                this.showNotification('⚠️ API response error. Please try a different routing API or check your connection.', 'warning');
-            } else if (error.message && error.message.includes('bounds.getSize')) {
-                this.showNotification('⚠️ Map rendering error. Please try a different routing API.', 'warning');
-            } else if (error.message && error.message.includes('CORS')) {
+            // Handle CORS errors specifically
+            if (error.message && error.message.includes('CORS')) {
                 console.error('❌ CORS Error: Unable to access API due to Cross-Origin policy');
                 if (routingApi === 'valhalla') {
                     this.showNotification('Valhalla CORS error: Try running the app locally (python -m http.server 8000) for direct access, or use OSRM/Mapbox APIs.', 'error');
@@ -2022,15 +2016,8 @@ class BikeRoutePlanner {
                     this.showNotification('Network error: Unable to connect to routing API. Check your internet connection.', 'error');
                 }
             } else {
-                this.showNotification('⚠️ Route generation failed. Please try a different routing API.', 'warning');
+                this.showNotification('Failed to generate route. Please try again.', 'error');
             }
-            
-            // Log available alternatives
-            console.log('🔄 Available routing APIs to try:');
-            console.log('  - OSRM (fallback - different routing)');
-            console.log('  - GraphHopper (requires API key)');
-            console.log('  - Mapbox (requires API key)');
-            console.log('  - OpenRouteService (requires API key)');
         }
     }
     
