@@ -709,6 +709,21 @@ class BikeRoutePlanner {
             points.push([lat / 1e5, lng / 1e5]);
         }
         
+        return points.map(coord => L.latLng(coord[0], coord[1]));
+    }
+    
+    getRouteTypeDescription(routeType) {
+        const descriptions = {
+            'drive': '�️ Road (Paved Only) - Recommended for road bikes and racing bikes',
+            'cycling': '� MTB (Trails Prioritized) - Optimized for mountain bikes and trails',
+            'foot': '🚶 Walking - Pedestrian paths and sidewalks only'
+        };
+        return descriptions[routeType] || routeType;
+    }
+    
+    handleReturnToStartToggle() {
+        const returnToStartCheckbox = document.getElementById('returnToStart');
+        const endInput = document.getElementById('endInput');
         const endLocationBtn = document.getElementById('endLocationBtn');
         
         if (!returnToStartCheckbox || !endInput || !endLocationBtn) return;
@@ -1422,7 +1437,7 @@ class BikeRoutePlanner {
             console.log(`🔄 Return to start: ${returnToStart}`);
             
             // Provide information about route type
-            const routeTypeInfo = this.getRouteTypeDescription(routeType);
+            const routeTypeInfo = this.getRouteTypeDescription ? this.getRouteTypeDescription(routeType) : 'Road Cycling';
             if (routeType === 'drive') {
                 console.log('🛣️ Using ROAD profile - Paved roads only, recommended for road bikes');
             } else if (routeType === 'cycling') {
@@ -1763,6 +1778,23 @@ class BikeRoutePlanner {
             } else if (routingApi === 'valhalla') {
                 console.log(`🛣️ Valhalla response structure:`, {
                     routes: data.routes,
+                    routesLength: data.routes?.length,
+                    firstRoute: data.routes?.[0],
+                    legs: data.routes?.[0]?.legs,
+                    steps: data.routes?.[0]?.legs?.[0]?.steps
+                });
+            } else {
+                console.log(`🆓 OSRM response structure:`, {
+                    routes: data.routes,
+                    routesLength: data.routes?.length,
+                    firstRoute: data.routes?.[0],
+                    geometry: data.routes?.[0]?.geometry,
+                    legs: data.routes?.[0]?.legs,
+                    steps: data.routes?.[0]?.legs?.[0]?.steps
+                });
+            }
+            
+            // Handle different API response structures
             let route, routePoints;
             let routeFound = false;
             
