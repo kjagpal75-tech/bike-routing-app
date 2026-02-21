@@ -1,3 +1,7 @@
+// DEBUG: This should appear at the very top of the console
+console.log('🚀 APP.JS LOADED - VERSION 2.2.3 WITH TIMESTAMP');
+console.log('🚀 CURRENT TIME:', new Date().toISOString());
+
 class BikeRoutePlanner {
     constructor() {
         console.log('🚴 Bike Route Planner for Road Cycling Initialized');
