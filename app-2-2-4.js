@@ -9,6 +9,38 @@ if (debugIndicator) {
     debugIndicator.style.background = 'green';
 }
 
+// Add compact debug panel
+const debugPanel = document.createElement('div');
+debugPanel.id = 'debugPanel';
+debugPanel.style.cssText = `
+    position: fixed;
+    top: 60px;
+    right: 10px;
+    background: rgba(0,0,0,0.8);
+    color: white;
+    padding: 10px;
+    border-radius: 5px;
+    z-index: 9999;
+    font-family: monospace;
+    font-size: 11px;
+    max-width: 300px;
+`;
+document.body.appendChild(debugPanel);
+
+// Update debug panel helper
+window.updateDebugPanel = (key, value) => {
+    const panel = document.getElementById('debugPanel');
+    if (panel) {
+        const timestamp = new Date().toLocaleTimeString();
+        panel.innerHTML += `<div>[${timestamp}] ${key}: ${value}</div>`;
+        // Keep only last 10 lines
+        const lines = panel.innerHTML.split('<div>');
+        if (lines.length > 10) {
+            panel.innerHTML = lines.slice(-10).join('<div>');
+        }
+    }
+};
+
 // Wait for DOM to be ready before initializing
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🚀 DOM ready, initializing BikeRoutePlanner');
@@ -1484,13 +1516,20 @@ class BikeRoutePlanner {
                 
                 console.log(`🛣️ Using approach: ${approaches[0].name}`);
                 console.log(`🛣️ API URL: ${apiUrl}`);
+                
+                // Update debug panel
+                window.updateDebugPanel('APPROACH', approaches[0].name);
+                window.updateDebugPanel('API', approaches[0].name.includes('proxy') ? 'LOCAL' : 'DIRECT');
+                
                 if (approaches[0].name.includes('Valhalla')) {
                     console.log(`🛣️ 🎉 Using working Valhalla API with Morrison Canyon Road routing!`);
                     console.log(`🛣️ 🛣️ Authentic Valhalla routing preferences available!`);
                     if (isLocalhost && isPort8000) {
                         console.log(`🛣️ 💡 Using local proxy on port 8000 for direct API access!`);
+                        window.updateDebugPanel('PROXY', 'PORT 8000');
                     } else {
                         console.log(`🛣️ 💡 Using direct Valhalla API (no proxy needed)`);
+                        window.updateDebugPanel('PROXY', 'DIRECT');
                     }
                 } else {
                     console.log(`🛣️ 💡 For best results, run locally: python3 proxy-server.py`);
@@ -1894,6 +1933,11 @@ class BikeRoutePlanner {
             console.log('🛣️ routePoints length:', routePoints.length);
             console.log('🛣️ routingApi:', routingApi);
             console.log('🛣️ === END ROUTE PROCESSING DEBUG ===');
+            
+            // Update debug panel with key info
+            window.updateDebugPanel('ROUTE_FOUND', routeFound ? 'YES' : 'NO');
+            window.updateDebugPanel('ROUTE_POINTS', routePoints.length);
+            window.updateDebugPanel('API_TYPE', routingApi);
             
             if (routeFound) {
                 // Store current route data for unit conversion
