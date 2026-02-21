@@ -1,6 +1,13 @@
 // DEBUG: This should appear at the very top of the console
-console.log('🚀 APP.JS LOADED - VERSION 2.2.3 WITH TIMESTAMP');
+console.log('🚀 APP.JS LOADED - VERSION 2.2.4 WITH TIMESTAMP');
 console.log('🚀 CURRENT TIME:', new Date().toISOString());
+
+// Update debug indicator on page
+const debugIndicator = document.getElementById('debugIndicator');
+if (debugIndicator) {
+    debugIndicator.textContent = '🚀 LOADED: app.js v2.2.4';
+    debugIndicator.style.background = 'green';
+}
 
 class BikeRoutePlanner {
     constructor() {
