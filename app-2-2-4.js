@@ -25,13 +25,40 @@ class BikeRoutePlanner {
     }
     
     initMap() {
-        // Initialize map centered on a cycling-friendly area
-        this.map = L.map('map').setView([40.7128, -74.0060], 13);
+        console.log('🗺️ Initializing map...');
         
-        // Add OpenStreetMap tiles
+        // Wait for DOM to be ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                this.createMap();
+            });
+        } else {
+            this.createMap();
+        }
+    }
+    
+    createMap() {
+        console.log('🗺️ Creating map container...');
+        
+        // Check if map container exists
+        const mapContainer = document.getElementById('map');
+        if (!mapContainer) {
+            console.error('❌ Map container not found');
+            this.showNotification('Map container not found. Please refresh the page.', 'error');
+            return;
+        }
+        
+        console.log('✅ Map container found, creating Leaflet map');
+        
+        // Initialize the map
+        this.map = L.map('map').setView([37.7749, -122.4194], 12);
+        
+        // Add tile layer
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors'
         }).addTo(this.map);
+        
+        console.log('🗺️ Map initialized successfully');
         
         // Add click handler to map
         this.map.on('click', (e) => this.handleMapClick(e));
