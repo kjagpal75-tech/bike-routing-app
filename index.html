@@ -115,6 +115,13 @@
     </div>
     
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="app-2-2-8.js"></script>
+    <script src="app-2-2-5.js"></script>
+    <script>
+        console.log('🔍 DEBUG: Checking route type from URL parameters');
+        const urlParams = new URLSearchParams(window.location.search);
+        const profileFromUrl = urlParams.get('profile');
+        console.log('🔍 DEBUG: Profile from URL:', profileFromUrl);
+        console.log('🔍 DEBUG: Current route type from dropdown:', document.getElementById('routeType')?.value);
+    </script>
 </body>
 </html>

@@ -551,13 +551,6 @@ class BikeRoutePlanner {
             });
         }
         
-                const apiType = routingApiSelect.value;
-                const apiStatus = document.getElementById('apiStatus');
-                if (apiStatus) {
-                    const statusText = {
-                        'osrm': '🆓 Using OSRM (Free)',
-                        'mapbox': '🗺️ Using Mapbox (Free Tier)',
-                        'valhalla': '🛣️ Using Valhalla (Free)',
                         'graphhopper': '🚶 Using GraphHopper (Free)',
                         'openrouteservice': '🌍 Using OpenRouteService (Free)'
                     };
@@ -693,7 +686,7 @@ class BikeRoutePlanner {
             const dlng = ((result & 1) ? ~(result >> 1) : (result >> 1));
             lng += dlng;
             
-            points.push([lat / 1e6, lng / 1e6]);
+            points.push([lat / 1e5, lng / 1e5]);
         }
         
         return points.map(coord => L.latLng(coord[0], coord[1]));
@@ -1424,9 +1417,7 @@ class BikeRoutePlanner {
             console.log(`🔄 Return to start: ${returnToStart}`);
             
             // Provide information about route type
-            const routeTypeInfo = this.getRouteTypeDescription ? this.getRouteTypeDescription(routeType) : 'Road Cycling';
-            console.log(`🛣️ Using route type: ${routeType}`);
-            console.log(`🛣️ Route description: ${routeTypeInfo}`);
+            const routeTypeInfo = this.getRouteTypeDescription(routeType);
             if (routeType === 'drive') {
                 console.log('🛣️ Using ROAD profile - Paved roads only, recommended for road bikes');
             } else if (routeType === 'cycling') {
@@ -2029,40 +2020,6 @@ class BikeRoutePlanner {
         
         // Update debug panel
         window.updateDebugPanel('MAP_RENDER', 'STARTING');
-        
-        // Debug: Check first few route points
-        console.log('🗺️ First 3 route points:');
-        for (let i = 0; i < Math.min(3, routePoints.length); i++) {
-            const point = routePoints[i];
-            console.log(`  Point ${i}:`, point);
-            console.log(`    Type:`, typeof point);
-            console.log(`    Has lat:`, 'lat' in point);
-            console.log(`    Has lng:`, 'lng' in point);
-            console.log(`    lat:`, point.lat);
-            console.log(`    lng:`, point.lng);
-            console.log(`    lat type:`, typeof point.lat);
-            console.log(`    lng type:`, typeof point.lng);
-            console.log(`    lat value:`, point.lat, typeof point.lat === 'number' ? '✅ number' : '❌ not number');
-            console.log(`    lng value:`, point.lng, typeof point.lng === 'number' ? '✅ number' : '❌ not number');
-        }
-        
-        // Check if coordinates are in reasonable range for California
-        const firstPoint = routePoints[0];
-        const lastPoint = routePoints[routePoints.length - 1];
-        console.log('🗺️ Coordinate range check:');
-        console.log(`  First point: lat=${firstPoint.lat}, lng=${firstPoint.lng}`);
-        console.log(`  Last point: lat=${lastPoint.lat}, lng=${lastPoint.lng}`);
-        console.log(`  Expected California: lat 32-42, lng -125-114`);
-        console.log(`  First point in California?`, firstPoint.lat >= 32 && firstPoint.lat <= 42 && firstPoint.lng >= -125 && firstPoint.lng <= -114 ? '✅ YES' : '❌ NO');
-        console.log(`  Last point in California?`, lastPoint.lat >= 32 && lastPoint.lat <= 42 && lastPoint.lng >= -125 && lastPoint.lng <= -114 ? '✅ YES' : '❌ NO');
-        
-        // Check if routePoints is a valid array
-        console.log('🗺️ Route points array check:');
-        console.log(`  routePoints type:`, typeof routePoints);
-        console.log(`  routePoints length:`, routePoints.length);
-        console.log(`  Is array:`, Array.isArray(routePoints) ? '✅ YES' : '❌ NO');
-        console.log(`  First element type:`, typeof routePoints[0]);
-        console.log(`  Map object exists:`, !!this.map);
         
         if (!this.map) {
             console.error('❌ Map object not available');
