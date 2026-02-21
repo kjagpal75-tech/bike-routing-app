@@ -2125,29 +2125,33 @@ class BikeRoutePlanner {
             console.log('🗺️ Bounds size:', bounds.getSize());
         } else {
             console.log('🗺️ Bounds has no getSize method, using manual calculation');
-            // Manual bounds calculation
+            // Manual bounds calculation - create proper LatLngBounds object
             const firstPoint = routePoints[0];
             const lastPoint = routePoints[routePoints.length - 1];
-            const manualBounds = {
-                getCenter: () => L.latLng(
-                    (firstPoint.lat + lastPoint.lat) / 2,
-                    (firstPoint.lng + lastPoint.lng) / 2
-                ),
-                getNorthEast: () => L.latLng(lastPoint.lat, lastPoint.lng),
-                getSouthWest: () => L.latLng(firstPoint.lat, firstPoint.lng)
-            };
-            console.log('🗺️ Manual bounds center:', manualBounds.getCenter());
             
+            // Create proper LatLngBounds object
             try {
+                const southWest = L.latLng(
+                    Math.min(firstPoint.lat, lastPoint.lat),
+                    Math.min(firstPoint.lng, lastPoint.lng)
+                );
+                const northEast = L.latLng(
+                    Math.max(firstPoint.lat, lastPoint.lat),
+                    Math.max(firstPoint.lng, lastPoint.lng)
+                );
+                const manualBounds = L.latLngBounds(southWest, northEast);
+                
+                console.log('🗺️ Manual bounds created:', manualBounds);
+                console.log('🗺️ Manual bounds center:', manualBounds.getCenter());
+                console.log('🗺️ Manual bounds type:', typeof manualBounds);
+                console.log('🗺️ Manual bounds constructor:', manualBounds.constructor.name);
+                
                 this.map.fitBounds(manualBounds, { padding: [50, 50] });
                 console.log('🗺️ Map bounds fitted successfully (manual)');
                 window.updateDebugPanel('MAP_RENDER', 'SUCCESS_MANUAL');
-            } catch (error) {
-                console.error('🗺️ Error fitting bounds:', error);
-                console.error('🗺️ Manual bounds object:', manualBounds);
-                console.error('🗺️ Manual bounds type:', typeof manualBounds);
-                console.error('🗺️ Map object:', this.map);
-                window.updateDebugPanel('MAP_ERROR', 'BOUNDS_ERROR_MANUAL');
+            } catch (boundsError) {
+                console.error('🗺️ Error creating manual bounds:', boundsError);
+                window.updateDebugPanel('MAP_ERROR', 'BOUNDS_CREATE_ERROR');
                 
                 // Try a simple center point instead of bounds
                 try {
