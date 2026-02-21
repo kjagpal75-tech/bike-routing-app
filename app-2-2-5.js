@@ -2130,7 +2130,22 @@ class BikeRoutePlanner {
                 window.updateDebugPanel('MAP_RENDER', 'SUCCESS_MANUAL');
             } catch (error) {
                 console.error('🗺️ Error fitting bounds:', error);
+                console.error('🗺️ Manual bounds object:', manualBounds);
+                console.error('🗺️ Manual bounds type:', typeof manualBounds);
+                console.error('🗺️ Map object:', this.map);
                 window.updateDebugPanel('MAP_ERROR', 'BOUNDS_ERROR_MANUAL');
+                
+                // Try a simple center point instead of bounds
+                try {
+                    const centerPoint = routePoints[0];
+                    console.log('🗺️ Trying simple center point:', centerPoint);
+                    this.map.setView(centerPoint, 14);
+                    console.log('🗺️ Map set to center point successfully');
+                    window.updateDebugPanel('MAP_RENDER', 'SUCCESS_CENTER');
+                } catch (centerError) {
+                    console.error('🗺️ Error setting center point:', centerError);
+                    window.updateDebugPanel('MAP_ERROR', 'CENTER_ERROR');
+                }
             }
         }
         
