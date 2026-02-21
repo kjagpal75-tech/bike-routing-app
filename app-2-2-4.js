@@ -1943,14 +1943,18 @@ class BikeRoutePlanner {
                 // Store current route data for unit conversion
                 this.currentRouteData = route;
                 
-                console.log(`🛣️ About to display route with routePoints: ${routePoints.length} points`);
+                console.log('🛣️ About to display route with routePoints:', routePoints.length, 'points');
                 console.log('🛣️ routePoints sample:', routePoints.slice(0, 3));
                 console.log('🛣️ routePoints type:', typeof routePoints[0]);
                 console.log('🛣️ routePoints[0] lat/lng:', routePoints[0] ? [routePoints[0].lat, routePoints[0].lng] : 'undefined');
                 
+                // Update debug panel
+                window.updateDebugPanel('MAP_DISPLAY', 'STARTING');
+                
                 // Validate routePoints before display
                 if (!routePoints || routePoints.length === 0) {
                     console.error('❌ No valid routePoints for display');
+                    window.updateDebugPanel('MAP_ERROR', 'NO_POINTS');
                     this.showNotification('No route points available for map display', 'error');
                     return;
                 }
@@ -1959,6 +1963,7 @@ class BikeRoutePlanner {
                 const firstPoint = routePoints[0];
                 if (!firstPoint || typeof firstPoint.lat !== 'number' || typeof firstPoint.lng !== 'number') {
                     console.error('❌ Invalid coordinates in routePoints:', firstPoint);
+                    window.updateDebugPanel('MAP_ERROR', 'INVALID_COORDS');
                     this.showNotification('Invalid route coordinates for map display', 'error');
                     return;
                 }
@@ -1967,6 +1972,7 @@ class BikeRoutePlanner {
                 console.log('🛣️ Validating bounds with last point:', routePoints[routePoints.length - 1]);
                 console.log('🛣️ Proceeding to display route...');
                 
+                window.updateDebugPanel('MAP_BOUNDS', 'VALID');
                 this.displayRoute(routePoints, route);
                 
                 // Handle different step formats for different APIs
@@ -2016,7 +2022,20 @@ class BikeRoutePlanner {
     }
     
     displayRoute(routePoints, routeData) {
+        console.log('🗺️ displayRoute called with', routePoints.length, 'points');
+        console.log('🗺️ Map object exists:', !!this.map);
+        
+        // Update debug panel
+        window.updateDebugPanel('MAP_RENDER', 'STARTING');
+        
+        if (!this.map) {
+            console.error('❌ Map object not available');
+            window.updateDebugPanel('MAP_ERROR', 'NO_MAP');
+            return;
+        }
+        
         if (this.routeLayer) {
+            console.log('🗺️ Removing existing route layer');
             this.map.removeLayer(this.routeLayer);
         }
         
@@ -2038,6 +2057,9 @@ class BikeRoutePlanner {
             routeWeight = 4;
         }
         
+        console.log('🗺️ Creating polyline with', routePoints.length, 'points');
+        console.log('🗺️ Route color:', routeColor);
+        
         this.routeLayer = L.polyline(routePoints, {
             color: routeColor,
             weight: routeWeight,
@@ -2045,9 +2067,15 @@ class BikeRoutePlanner {
             smoothFactor: 1
         }).addTo(this.map);
         
+        console.log('🗺️ Route layer added to map');
+        window.updateDebugPanel('MAP_RENDER', 'SUCCESS');
+        
         // Fit map to show entire route
         const bounds = L.latLngBounds(routePoints);
+        console.log('🗺️ Fitting map to bounds:', bounds);
         this.map.fitBounds(bounds, { padding: [50, 50] });
+        
+        console.log('🗺️ Map bounds fitted successfully');
         
         // Show route info panel
         const routeInfoDiv = document.getElementById('routeInfo');
