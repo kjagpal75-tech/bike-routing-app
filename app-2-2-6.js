@@ -2083,7 +2083,21 @@ class BikeRoutePlanner {
             console.log(`    Has lng:`, 'lng' in point);
             console.log(`    lat:`, point.lat);
             console.log(`    lng:`, point.lng);
+            console.log(`    lat type:`, typeof point.lat);
+            console.log(`    lng type:`, typeof point.lng);
+            console.log(`    lat value:`, point.lat, typeof point.lat === 'number' ? '✅ number' : '❌ not number');
+            console.log(`    lng value:`, point.lng, typeof point.lng === 'number' ? '✅ number' : '❌ not number');
         }
+        
+        // Check if coordinates are in reasonable range for California
+        const firstPoint = routePoints[0];
+        const lastPoint = routePoints[routePoints.length - 1];
+        console.log('🗺️ Coordinate range check:');
+        console.log(`  First point: lat=${firstPoint.lat}, lng=${firstPoint.lng}`);
+        console.log(`  Last point: lat=${lastPoint.lat}, lng=${lastPoint.lng}`);
+        console.log(`  Expected California: lat 32-42, lng -125-114`);
+        console.log(`  First point in California?`, firstPoint.lat >= 32 && firstPoint.lat <= 42 && firstPoint.lng >= -125 && firstPoint.lng <= -114 ? '✅ YES' : '❌ NO');
+        console.log(`  Last point in California?`, lastPoint.lat >= 32 && lastPoint.lat <= 42 && lastPoint.lng >= -125 && lastPoint.lng <= -114 ? '✅ YES' : '❌ NO');
         
         this.routeLayer = L.polyline(routePoints, {
             color: routeColor,
