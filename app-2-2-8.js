@@ -706,7 +706,7 @@ class BikeRoutePlanner {
             const dlng = ((result & 1) ? ~(result >> 1) : (result >> 1));
             lng += dlng;
             
-            points.push([lat / 1e5, lng / 1e5]);
+            points.push([lat / 1e6, lng / 1e6]);
         }
         
         return points.map(coord => L.latLng(coord[0], coord[1]));
