@@ -2089,15 +2089,36 @@ class BikeRoutePlanner {
         // Fit map to show entire route
         const bounds = L.latLngBounds(routePoints);
         console.log('🗺️ Fitting map to bounds:', bounds);
+        console.log('🗺️ Bounds type:', typeof bounds);
+        console.log('🗺️ Bounds constructor:', bounds.constructor.name);
         console.log('🗺️ Bounds center:', bounds.getCenter());
-        console.log('🗺️ Bounds size:', bounds.getSize());
         
-        try {
-            this.map.fitBounds(bounds, { padding: [50, 50] });
-            console.log('🗺️ Map bounds fitted successfully');
-        } catch (error) {
-            console.error('🗺️ Error fitting bounds:', error);
-            window.updateDebugPanel('MAP_ERROR', 'BOUNDS_ERROR');
+        // Check if bounds has getSize method
+        if (typeof bounds.getSize === 'function') {
+            console.log('🗺️ Bounds size:', bounds.getSize());
+        } else {
+            console.log('🗺️ Bounds has no getSize method, using manual calculation');
+            // Manual bounds calculation
+            const firstPoint = routePoints[0];
+            const lastPoint = routePoints[routePoints.length - 1];
+            const manualBounds = {
+                getCenter: () => L.latLng(
+                    (firstPoint.lat + lastPoint.lat) / 2,
+                    (firstPoint.lng + lastPoint.lng) / 2
+                ),
+                getNorthEast: () => L.latLng(lastPoint.lat, lastPoint.lng),
+                getSouthWest: () => L.latLng(firstPoint.lat, firstPoint.lng)
+            };
+            console.log('🗺️ Manual bounds center:', manualBounds.getCenter());
+            
+            try {
+                this.map.fitBounds(manualBounds, { padding: [50, 50] });
+                console.log('🗺️ Map bounds fitted successfully (manual)');
+                window.updateDebugPanel('MAP_RENDER', 'SUCCESS_MANUAL');
+            } catch (error) {
+                console.error('🗺️ Error fitting bounds:', error);
+                window.updateDebugPanel('MAP_ERROR', 'BOUNDS_ERROR_MANUAL');
+            }
         }
         
         // Show route info panel
