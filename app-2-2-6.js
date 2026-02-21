@@ -1459,7 +1459,7 @@ class BikeRoutePlanner {
             } else if (routingApi === 'valhalla') {
                 // Valhalla Directions API - multiple fallback approaches
                 // Map route types to Valhalla profiles
-                const valhallaProfile = routeType === 'drive' ? 'auto' : routeType === 'cycling' ? 'bicycle' : 'pedestrian';
+                const valhallaProfile = routeType === 'cycling' ? 'bicycle' : routeType === 'drive' ? 'auto' : 'pedestrian';
                 
                 // Build the JSON data
                 const valhallaData = {
@@ -1522,14 +1522,17 @@ class BikeRoutePlanner {
                 window.updateDebugPanel('API', approaches[0].name.includes('proxy') ? 'LOCAL' : 'DIRECT');
                 
                 if (approaches[0].name.includes('Valhalla')) {
-                    console.log(`🛣️ 🎉 Using working Valhalla API with Morrison Canyon Road routing!`);
+                    console.log(`🛣️ 🎉 Using working Valhalla API with ${valhallaProfile} profile!`);
                     console.log(`🛣️ 🛣️ Authentic Valhalla routing preferences available!`);
-                    if (isLocalhost && isPort8000) {
+                    if (approaches[0].name.includes('direct')) {
+                        console.log(`🛣️ 💡 Using direct Valhalla API (no rate limiting)`);
+                        window.updateDebugPanel('PROXY', 'DIRECT');
+                    } else if (isLocalhost && isPort8000) {
                         console.log(`🛣️ 💡 Using local proxy on port 8000 for direct API access!`);
                         window.updateDebugPanel('PROXY', 'PORT 8000');
                     } else {
-                        console.log(`🛣️ 💡 Using direct Valhalla API (no proxy needed)`);
-                        window.updateDebugPanel('PROXY', 'DIRECT');
+                        console.log(`🛣️ 💡 Using CORS proxy for API access`);
+                        window.updateDebugPanel('PROXY', 'CORS_PROXY');
                     }
                 } else {
                     console.log(`🛣️ 💡 For best results, run locally: python3 proxy-server.py`);
