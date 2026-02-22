@@ -1,15 +1,4 @@
-// DEBUG: This should appear at the very top of the console
-console.log('🚀 APP.JS LOADED - VERSION 2.2.4 WITH TIMESTAMP');
-console.log('🚀 CURRENT TIME:', new Date().toISOString());
-
-// Update debug indicator on page
-const debugIndicator = document.getElementById('debugIndicator');
-if (debugIndicator) {
-    debugIndicator.textContent = '🚀 LOADED: app.js v2.2.4';
-    debugIndicator.style.background = 'green';
-}
-
-// Add compact debug panel
+// Initialize debug panel for development
 const debugPanel = document.createElement('div');
 debugPanel.id = 'debugPanel';
 debugPanel.style.cssText = `
@@ -43,7 +32,6 @@ window.updateDebugPanel = (key, value) => {
 
 // Wait for DOM to be ready before initializing
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 DOM ready, initializing BikeRoutePlanner');
     new BikeRoutePlanner();
 });
 
