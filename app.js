@@ -2388,6 +2388,12 @@ class BikeRoutePlanner {
             const distance = this.convertDistance(step.distance);
             const duration = Math.round((step.duration || 0) / 60);
             
+            // Debug: Log distance values to verify they're correct
+            console.log(`📍 Step ${index + 1}: "${instruction}"`);
+            console.log(`  Raw distance: ${step.distance}m`);
+            console.log(`  Converted distance: ${distance}`);
+            console.log(`  Duration: ${duration}min`);
+            
             // For Valhalla, the instruction is usually well-formatted already
             // Let's avoid over-processing it
             let displayInstruction = instruction;
@@ -2421,7 +2427,6 @@ class BikeRoutePlanner {
                 <div class="turn-instruction">${displayInstruction}</div>
                 <div class="turn-step-details">
                     <span class="turn-duration">⏱️ ${duration} min</span>
-                    <span class="turn-distance-detail">📏 ${this.convertDistance(step.distance)}</span>
                 </div>
             `;
             
