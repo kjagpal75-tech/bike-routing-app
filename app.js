@@ -2368,12 +2368,6 @@ class BikeRoutePlanner {
         } else if (apiType === 'valhalla') {
             // Valhalla API format - uses maneuvers
             processedSteps = steps.map((step, index) => {
-                // Debug: Log the actual structure of Valhalla maneuver
-                console.log(`🔍 Valhalla Step ${index + 1} structure:`, step);
-                console.log(`  Available fields:`, Object.keys(step));
-                console.log(`  step.distance: ${step.distance}`);
-                console.log(`  step.length: ${step.length}`);
-                
                 // Valhalla uses 'distance' field (in km), convert to meters for consistency
                 const distance = (step.distance || 0) * 1000; // Convert km to meters
                 
@@ -2394,13 +2388,6 @@ class BikeRoutePlanner {
             const distance = this.convertDistance(step.distance);
             const duration = Math.round((step.duration || 0) / 60);
             
-            // Debug: Log the actual instruction and step data
-            console.log(`📍 Step ${index + 1}:`);
-            console.log(`  Raw instruction: "${instruction}"`);
-            console.log(`  Full step data:`, step);
-            console.log(`  Maneuver type: ${step.maneuver?.type}`);
-            console.log(`  Modifier: ${step.maneuver?.modifier}`);
-            
             // For Valhalla, the instruction is usually well-formatted already
             // Let's avoid over-processing it
             let displayInstruction = instruction;
@@ -2409,25 +2396,20 @@ class BikeRoutePlanner {
             if (apiType !== 'valhalla') {
                 // Extract street name from instruction if available
                 const streetName = this.extractStreetName(instruction);
-                console.log(`📍 Street name extracted: "${streetName}"`);
                 
                 if (streetName && streetName.trim().length > 0) {
                     // Remove the street name from instruction and format properly
                     const cleanInstruction = instruction.replace(streetName, '').replace(/\s+/g, ' ').trim();
                     displayInstruction = `${streetName.trim()} - ${cleanInstruction}`;
-                    console.log(`📍 Display instruction: "${displayInstruction}"`);
                 } else {
                     // Fallback: Show route type when no street name found
                     const routeTypeSelect = document.getElementById('routeType');
                     const routeType = routeTypeSelect ? routeTypeSelect.value : 'drive';
                     const routeTypeDescription = routeType === 'drive' ? 'Road' : routeType === 'cycling' ? 'MTB Trail' : 'Walking Path';
                     displayInstruction = `${routeTypeDescription} - ${instruction}`;
-                    console.log(`📍 No street name found, using route type fallback: "${displayInstruction}"`);
                 }
-            } else {
-                // For Valhalla, just use the instruction as-is (it's already well-formatted)
-                console.log(`📍 Using Valhalla instruction as-is: "${displayInstruction}"`);
             }
+            // For Valhalla, just use the instruction as-is (it's already well-formatted)
             
             const stepDiv = document.createElement('div');
             stepDiv.className = 'turn-step';
