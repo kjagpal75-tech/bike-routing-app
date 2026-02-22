@@ -2368,36 +2368,24 @@ class BikeRoutePlanner {
         } else if (apiType === 'valhalla') {
             // Valhalla API format - uses maneuvers
             processedSteps = steps.map((step, index) => {
-                // Debug: Log the complete structure to understand proxy response
-                console.log(`🔍 Valhalla Step ${index + 1} complete structure:`, step);
-                console.log(`  All fields:`, Object.keys(step));
-                console.log(`  step.distance: ${step.distance}`);
-                console.log(`  step.length: ${step.length}`);
-                console.log(`  typeof step.distance: ${typeof step.distance}`);
-                console.log(`  step.maneuver:`, step.maneuver);
-                if (step.maneuver) {
-                    console.log(`  maneuver.distance: ${step.maneuver.distance}`);
-                    console.log(`  maneuver.length: ${step.maneuver.length}`);
-                }
+                // Valhalla stores distance and time in the maneuver object
+                const maneuverDistance = step.maneuver?.distance || 0;
+                const maneuverTime = step.maneuver?.time || 0;
+                console.log(`🔍 Valhalla Step ${index + 1}:`);
+                console.log(`  Instruction: "${step.instruction || step.maneuver?.instruction}"`);
+                console.log(`  maneuver.distance: ${maneuverDistance}`);
+                console.log(`  maneuver.time: ${maneuverTime}`);
                 
-                // Try different distance field locations
-                let distance = step.distance || step.length || 0;
-                if (distance === 0 && step.maneuver) {
-                    distance = step.maneuver.distance || step.maneuver.length || 0;
-                }
+                // Convert km to meters (Valhalla returns distance in km)
+                const distance = maneuverDistance * 1000;
+                // Time is in seconds, will convert to minutes in display
                 
-                // Convert to meters (Valhalla might return km or meters)
-                if (distance > 0 && distance < 1) {
-                    // Likely in km, convert to meters
-                    distance = distance * 1000;
-                }
-                
-                console.log(`  Final distance used: ${distance}m`);
+                console.log(`  Final distance: ${distance}m, time: ${maneuverTime}s`);
                 
                 return {
                     instruction: step.instruction || step.maneuver?.instruction || 'Continue',
                     distance: distance,
-                    duration: step.time || step.maneuver?.time || 0,
+                    duration: maneuverTime, // Keep in seconds for conversion
                     maneuver: step
                 };
             });
