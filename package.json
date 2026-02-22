@@ -1,0 +1,19 @@
+{
+  "name": "bike-routing-app",
+  "version": "1.0.0",
+  "description": "Bike routing app with Valhalla API proxy",
+  "main": "index.html",
+  "scripts": {
+    "build": "echo 'No build step required'",
+    "dev": "netlify dev"
+  },
+  "dependencies": {
+    "node-fetch": "^2.6.7"
+  },
+  "devDependencies": {
+    "netlify-cli": "^13.0.0"
+  },
+  "keywords": ["bike", "routing", "valhalla", "leaflet"],
+  "author": "",
+  "license": "MIT"
+}

@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bike Route Planner - Netlify Edition</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🚴 Bike Route Planner</h1>
+            <p class="subtitle">Netlify Edition - Valhalla Bicycle Routing</p>
+        </header>
+
+        <div class="main-content">
+            <div class="sidebar">
+                <div class="control-section">
+                    <h3>Route Settings</h3>
+                    
+                    <div class="form-group">
+                        <label for="routeType">Route Type:</label>
+                        <select id="routeType">
+                            <option value="drive">🛣️ Road (paved only)</option>
+                            <option value="cycling">🚵 MTB (trails prioritized)</option>
+                            <option value="foot">🚶 Walking</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="routingApi">Routing API:</label>
+                        <select id="routingApi">
+                            <option value="valhalla">🗺️ Valhalla (recommended)</option>
+                            <option value="osrm">🛣️ OSRM</option>
+                            <option value="mapbox">📍 Mapbox</option>
+                            <option value="graphhopper">🚴 GraphHopper</option>
+                            <option value="openrouteservice">🌍 OpenRouteService</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="useImperialUnits">
+                            Use Imperial Units (miles, mph)
+                        </label>
+                    </div>
+                </div>
+
+                <div class="control-section">
+                    <h3>Addresses</h3>
+                    
+                    <div class="form-group">
+                        <label for="startAddress">Start Address:</label>
+                        <input type="text" id="startAddress" placeholder="Enter start address or click map">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="endAddress">End Address:</label>
+                        <input type="text" id="endAddress" placeholder="Enter end address or click map">
+                    </div>
+
+                    <div class="form-group">
+                        <button id="useCurrentLocation" class="btn btn-secondary">
+                            📍 Use Current Location
+                        </button>
+                    </div>
+                </div>
+
+                <div class="control-section">
+                    <h3>Actions</h3>
+                    
+                    <div class="form-group">
+                        <button id="generateRoute" class="btn btn-primary">
+                            🛣️ Generate Route
+                        </button>
+                    </div>
+
+                    <div class="form-group">
+                        <button id="clearRoute" class="btn btn-secondary">
+                            🗑️ Clear Route
+                        </button>
+                    </div>
+                </div>
+
+                <div class="control-section">
+                    <h3>Route Information</h3>
+                    <div id="routeInfo">
+                        <p class="no-route">Generate a route to see information</p>
+                    </div>
+                </div>
+
+                <div class="control-section">
+                    <h3>Elevation</h3>
+                    <div id="elevationChart">
+                        <p class="no-route">Generate a route to see elevation</p>
+                    </div>
+                    <div id="elevationStats">
+                        <p class="no-route">Generate a route to see stats</p>
+                    </div>
+                </div>
+
+                <div class="control-section">
+                    <h3>Directions</h3>
+                    <div id="directions">
+                        <p class="no-route">Generate a route to see directions</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="map-container">
+                <div id="map"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="app-netlify.js"></script>
+</body>
+</html>
