@@ -1,32 +1,36 @@
-// Initialize debug panel for development
-const debugPanel = document.createElement('div');
-debugPanel.id = 'debugPanel';
-debugPanel.style.cssText = `
-    position: fixed;
-    top: 60px;
-    right: 10px;
-    background: rgba(0,0,0,0.8);
-    color: white;
-    padding: 10px;
-    border-radius: 5px;
-    z-index: 9999;
-    font-family: monospace;
-    font-size: 11px;
-    max-width: 300px;
-`;
-document.body.appendChild(debugPanel);
+// Initialize debug panel for development only (localhost)
+const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+let debugPanel = null;
 
-// Update debug panel helper
+if (isLocalhost) {
+    debugPanel = document.createElement('div');
+    debugPanel.id = 'debugPanel';
+    debugPanel.style.cssText = `
+        position: fixed;
+        top: 60px;
+        right: 10px;
+        background: rgba(0,0,0,0.8);
+        color: white;
+        padding: 10px;
+        border-radius: 5px;
+        z-index: 9999;
+        font-family: monospace;
+        font-size: 11px;
+        max-width: 300px;
+    `;
+    document.body.appendChild(debugPanel);
+}
+
+// Update debug panel helper (only works on localhost)
 window.updateDebugPanel = (key, value) => {
-    const panel = document.getElementById('debugPanel');
-    if (panel) {
-        const timestamp = new Date().toLocaleTimeString();
-        panel.innerHTML += `<div>[${timestamp}] ${key}: ${value}</div>`;
-        // Keep only last 10 lines
-        const lines = panel.innerHTML.split('<div>');
-        if (lines.length > 10) {
-            panel.innerHTML = lines.slice(-10).join('<div>');
-        }
+    if (!isLocalhost || !debugPanel) return;
+    
+    const timestamp = new Date().toLocaleTimeString();
+    debugPanel.innerHTML += `<div>[${timestamp}] ${key}: ${value}</div>`;
+    // Keep only last 10 lines
+    const lines = debugPanel.innerHTML.split('<div>');
+    if (lines.length > 10) {
+        debugPanel.innerHTML = lines.slice(-10).join('<div>');
     }
 };
 
