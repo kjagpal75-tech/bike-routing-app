@@ -2368,16 +2368,16 @@ class BikeRoutePlanner {
         } else if (apiType === 'valhalla') {
             // Valhalla API format - uses maneuvers
             processedSteps = steps.map((step, index) => {
-                // Valhalla stores distance and time in the maneuver object
-                const maneuverDistance = step.maneuver?.distance || 0;
+                // Valhalla stores distance in 'length' and time in 'time' fields
+                const maneuverLength = step.maneuver?.length || 0;
                 const maneuverTime = step.maneuver?.time || 0;
                 console.log(`🔍 Valhalla Step ${index + 1}:`);
                 console.log(`  Instruction: "${step.instruction || step.maneuver?.instruction}"`);
-                console.log(`  maneuver.distance: ${maneuverDistance}`);
+                console.log(`  maneuver.length: ${maneuverLength}`);
                 console.log(`  maneuver.time: ${maneuverTime}`);
                 
-                // Convert km to meters (Valhalla returns distance in km)
-                const distance = maneuverDistance * 1000;
+                // Convert km to meters (Valhalla returns length in km)
+                const distance = maneuverLength * 1000;
                 // Time is in seconds, will convert to minutes in display
                 
                 console.log(`  Final distance: ${distance}m, time: ${maneuverTime}s`);

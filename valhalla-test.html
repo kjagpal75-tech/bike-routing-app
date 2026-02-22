@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Valhalla API Test</title>
+</head>
+<body>
+    <h1>Valhalla API Response Test</h1>
+    <button onclick="testValhallaAPI()">Test Valhalla API</button>
+    <pre id="output"></pre>
+
+    <script>
+        async function testValhallaAPI() {
+            const output = document.getElementById('output');
+            output.textContent = 'Testing...';
+            
+            try {
+                // Use the exact same coordinates and format as our app
+                const valhallaData = {
+                    locations: [
+                        {lat: 37.5702761, lon: -121.9647758},
+                        {lat: 37.5746621, lon: -121.9328122}
+                    ],
+                    costing: 'bicycle',
+                    directions_maneuvers: true,
+                    geometry: true,
+                    units: 'kilometers'
+                };
+                
+                const apiUrl = `https://valhalla1.openstreetmap.de/route?json=${encodeURIComponent(JSON.stringify(valhallaData))}`;
+                
+                console.log('Testing URL:', apiUrl);
+                
+                const response = await fetch(apiUrl);
+                const data = await response.json();
+                
+                console.log('Full response:', data);
+                
+                // Focus on the maneuvers structure
+                if (data.trip && data.trip.legs && data.trip.legs[0] && data.trip.legs[0].maneuvers) {
+                    const maneuvers = data.trip.legs[0].maneuvers;
+                    
+                    output.textContent = '=== VALHALLA MANEUVER STRUCTURE ===\n\n';
+                    output.textContent += `Total maneuvers: ${maneuvers.length}\n\n`;
+                    
+                    maneuvers.forEach((maneuver, index) => {
+                        output.textContent += `--- Maneuver ${index + 1} ---\n`;
+                        output.textContent += `Instruction: "${maneuver.instruction}"\n`;
+                        output.textContent += `Available fields: ${Object.keys(maneuver).join(', ')}\n`;
+                        output.textContent += `Distance: ${maneuver.distance} (type: ${typeof maneuver.distance})\n`;
+                        output.textContent += `Time: ${maneuver.time} (type: ${typeof maneuver.time})\n`;
+                        output.textContent += `Length: ${maneuver.length}\n`;
+                        output.textContent += `Begin shape index: ${maneuver.begin_shape_index}\n`;
+                        output.textContent += `End shape index: ${maneuver.end_shape_index}\n`;
+                        output.textContent += `Type: ${maneuver.type}\n`;
+                        
+                        // Show full maneuver for first few
+                        if (index < 3) {
+                            output.textContent += `Full maneuver:\n${JSON.stringify(maneuver, null, 2)}\n`;
+                        }
+                        output.textContent += '\n';
+                    });
+                } else {
+                    output.textContent = 'No maneuvers found in response\n\n';
+                    output.textContent += 'Full response:\n' + JSON.stringify(data, null, 2);
+                }
+                
+            } catch (error) {
+                output.textContent = 'Error: ' + error.message;
+                console.error('Error:', error);
+            }
+        }
+    </script>
+</body>
+</html>
