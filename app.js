@@ -2368,13 +2368,36 @@ class BikeRoutePlanner {
         } else if (apiType === 'valhalla') {
             // Valhalla API format - uses maneuvers
             processedSteps = steps.map((step, index) => {
-                // Valhalla uses 'distance' field (in km), convert to meters for consistency
-                const distance = (step.distance || 0) * 1000; // Convert km to meters
+                // Debug: Log the complete structure to understand proxy response
+                console.log(`🔍 Valhalla Step ${index + 1} complete structure:`, step);
+                console.log(`  All fields:`, Object.keys(step));
+                console.log(`  step.distance: ${step.distance}`);
+                console.log(`  step.length: ${step.length}`);
+                console.log(`  typeof step.distance: ${typeof step.distance}`);
+                console.log(`  step.maneuver:`, step.maneuver);
+                if (step.maneuver) {
+                    console.log(`  maneuver.distance: ${step.maneuver.distance}`);
+                    console.log(`  maneuver.length: ${step.maneuver.length}`);
+                }
+                
+                // Try different distance field locations
+                let distance = step.distance || step.length || 0;
+                if (distance === 0 && step.maneuver) {
+                    distance = step.maneuver.distance || step.maneuver.length || 0;
+                }
+                
+                // Convert to meters (Valhalla might return km or meters)
+                if (distance > 0 && distance < 1) {
+                    // Likely in km, convert to meters
+                    distance = distance * 1000;
+                }
+                
+                console.log(`  Final distance used: ${distance}m`);
                 
                 return {
-                    instruction: step.instruction || 'Continue',
+                    instruction: step.instruction || step.maneuver?.instruction || 'Continue',
                     distance: distance,
-                    duration: step.time || 0,
+                    duration: step.time || step.maneuver?.time || 0,
                     maneuver: step
                 };
             });
