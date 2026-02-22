@@ -2371,13 +2371,11 @@ class BikeRoutePlanner {
                 // Debug: Log the actual structure of Valhalla maneuver
                 console.log(`🔍 Valhalla Step ${index + 1} structure:`, step);
                 console.log(`  Available fields:`, Object.keys(step));
-                console.log(`  step.length: ${step.length}`);
                 console.log(`  step.distance: ${step.distance}`);
-                console.log(`  step.begin_shape_index: ${step.begin_shape_index}`);
-                console.log(`  step.end_shape_index: ${step.end_shape_index}`);
+                console.log(`  step.length: ${step.length}`);
                 
-                // Try different distance fields that Valhalla might use
-                const distance = step.length || step.distance || 0;
+                // Valhalla uses 'distance' field (in km), convert to meters for consistency
+                const distance = (step.distance || 0) * 1000; // Convert km to meters
                 
                 return {
                     instruction: step.instruction || 'Continue',
