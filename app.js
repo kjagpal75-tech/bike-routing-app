@@ -1432,7 +1432,6 @@ class BikeRoutePlanner {
             const routingApiSelect = document.getElementById('routingApi');
             const routingApi = routingApiSelect ? routingApiSelect.value : 'osrm';
             
-            console.log(`🛣️ Using route type: ${routeType}`);
             console.log(`🌐 Using routing API: ${routingApi}`);
             console.log(`🔄 Return to start: ${returnToStart}`);
             
@@ -1460,31 +1459,63 @@ class BikeRoutePlanner {
                 }
                 apiUrl = `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${routeType}/${coordsStr}?access_token=${mapboxToken}&geometries=geojson&steps=true&overview=full`;
             } else if (routingApi === 'valhalla') {
-                // Valhalla Directions API - use correct API endpoint
+                // Valhalla Directions API - use Netlify proxy for online hosting
                 // Map route types to Valhalla profiles (bicycle for bike-friendly routes)
                 valhallaProfile = routeType === 'drive' ? 'bicycle' : routeType === 'cycling' ? 'bicycle' : 'pedestrian';
                 
-                // Build JSON request for Valhalla API
-                const valhallaData = {
-                    locations: coordinates.map(coord => ({
-                        lat: coord.lat,
-                        lon: coord.lng
-                    })),
-                    costing: valhallaProfile,
-                    directions_maneuvers: true,
-                    geometry: true,
-                    units: 'kilometers'
-                };
+                // Check if we're running on Netlify (has .netlify in hostname) or localhost
+                const isNetlify = window.location.hostname.includes('.netlify.app') || window.location.hostname.includes('netlify');
+                const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
                 
-                // Use correct Valhalla API endpoint
-                apiUrl = `https://valhalla1.openstreetmap.de/route?json=${encodeURIComponent(JSON.stringify(valhallaData))}`;
-                console.log(`🛣️ Valhalla API URL: ${apiUrl}`);
-                console.log(`🛣️ Using profile: ${valhallaProfile}`);
-                console.log(`🛣️ Note: Using valhalla1.openstreetmap.de API endpoint`);
-                
-                window.updateDebugPanel('APPROACH', 'Valhalla direct');
-                window.updateDebugPanel('API', 'Valhalla');
-                window.updateDebugPanel('PROFILE', valhallaProfile);
+                if (isNetlify) {
+                    // Use Netlify function proxy for online hosting
+                    console.log('🌐 Using Netlify proxy for Valhalla API');
+                    
+                    // Build request for proxy
+                    const valhallaRequest = {
+                        profile: valhallaProfile,
+                        locations: coordinates.map(coord => ({
+                            lat: coord.lat,
+                            lon: coord.lng
+                        }))
+                    };
+                    
+                    apiUrl = '/.netlify/functions/valhalla-proxy';
+                    
+                    // Store request body for POST
+                    this.valhallaRequestBody = JSON.stringify(valhallaRequest);
+                    
+                    console.log(`🛣️ Valhalla proxy URL: ${apiUrl}`);
+                    console.log(`🛣️ Proxy request body:`, valhallaRequest);
+                    
+                    window.updateDebugPanel('APPROACH', 'Valhalla (Netlify proxy)');
+                    window.updateDebugPanel('API', 'PROXY');
+                    window.updateDebugPanel('PROFILE', valhallaProfile);
+                    
+                } else {
+                    // Use direct API for localhost (no CORS issues)
+                    console.log('🏠 Using direct Valhalla API for localhost');
+                    
+                    const valhallaData = {
+                        locations: coordinates.map(coord => ({
+                            lat: coord.lat,
+                            lon: coord.lng
+                        })),
+                        costing: valhallaProfile,
+                        directions_maneuvers: true,
+                        geometry: true,
+                        units: 'kilometers'
+                    };
+                    
+                    apiUrl = `https://valhalla1.openstreetmap.de/route?json=${encodeURIComponent(JSON.stringify(valhallaData))}`;
+                    
+                    console.log(`🛣️ Valhalla direct API URL: ${apiUrl}`);
+                    console.log(`🛣️ Using profile: ${valhallaProfile}`);
+                    
+                    window.updateDebugPanel('APPROACH', 'Valhalla (direct API)');
+                    window.updateDebugPanel('API', 'DIRECT');
+                    window.updateDebugPanel('PROFILE', valhallaProfile);
+                }
             } else if (routingApi === 'graphhopper') {
                 // GraphHopper Directions API
                 const graphhopperToken = this.getGraphhopperToken();
@@ -1560,10 +1591,17 @@ class BikeRoutePlanner {
             
             console.log(`🌐 API URL: ${apiUrl}`);
             const response = await fetch(apiUrl, {
-                method: 'GET',
-                headers: {},
+                method: this.valhallaRequestBody || this.orsRequestBody ? 'POST' : 'GET',
+                headers: this.valhallaRequestBody || this.orsRequestBody ? {
+                    'Content-Type': 'application/json'
+                } : {},
+                body: this.valhallaRequestBody || this.orsRequestBody || null,
                 mode: 'cors'
             });
+            
+            // Clear request body after use
+            this.valhallaRequestBody = null;
+            this.orsRequestBody = null;
             
             let data = await response.json();
             console.log(`🌐 API Response:`, data);
