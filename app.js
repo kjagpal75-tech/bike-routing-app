@@ -2367,12 +2367,25 @@ class BikeRoutePlanner {
             }));
         } else if (apiType === 'valhalla') {
             // Valhalla API format - uses maneuvers
-            processedSteps = steps.map((step, index) => ({
-                instruction: step.instruction || 'Continue',
-                distance: step.length || 0,
-                duration: step.time || 0,
-                maneuver: step
-            }));
+            processedSteps = steps.map((step, index) => {
+                // Debug: Log the actual structure of Valhalla maneuver
+                console.log(`🔍 Valhalla Step ${index + 1} structure:`, step);
+                console.log(`  Available fields:`, Object.keys(step));
+                console.log(`  step.length: ${step.length}`);
+                console.log(`  step.distance: ${step.distance}`);
+                console.log(`  step.begin_shape_index: ${step.begin_shape_index}`);
+                console.log(`  step.end_shape_index: ${step.end_shape_index}`);
+                
+                // Try different distance fields that Valhalla might use
+                const distance = step.length || step.distance || 0;
+                
+                return {
+                    instruction: step.instruction || 'Continue',
+                    distance: distance,
+                    duration: step.time || 0,
+                    maneuver: step
+                };
+            });
         } else {
             // OSRM API format
             processedSteps = steps;
