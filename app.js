@@ -1194,67 +1194,6 @@ class BikeRoutePlanner {
         }
     }
     
-    async setupTestRoute() {
-        console.log('🧪 Setting up test route...');
-        
-        try {
-            // Clear existing route
-            console.log('🗑️ Clearing existing route...');
-            this.clearRoute();
-            
-            // Test different address formats for Dow Court, Fremont
-            console.log('📍 Testing address resolution...');
-            
-            // Try the specific address first
-            const startAddress = "38695, Dow Court, Fremont, CA";
-            console.log(`🔍 Trying to resolve: ${startAddress}`);
-            
-            let startResult = await this.tryResolveAddress(startAddress);
-            if (!startResult) {
-                // Fallback to Dow Court, Fremont
-                console.log('� Trying fallback: Dow Court, Fremont, CA');
-                startResult = await this.tryResolveAddress("Dow Court, Fremont, CA");
-            }
-            
-            if (!startResult) {
-                // Fallback to Fremont, CA
-                console.log('🔄 Trying fallback: Fremont, CA');
-                startResult = await this.tryResolveAddress("Fremont, CA");
-            }
-            
-            if (startResult) {
-                const startLatlng = L.latLng(parseFloat(startResult.lat), parseFloat(startResult.lon));
-                this.setStartPoint(startLatlng);
-                console.log(`✅ Start point set to: ${startResult.display_name}`);
-            } else {
-                console.log('❌ Could not resolve start address');
-                this.showNotification('Could not resolve start address', 'error');
-                return;
-            }
-            
-            // Set waypoint: Vargas Regional Park
-            console.log('📍 Setting waypoint...');
-            const waypointAddress = "Vargas Regional Park, Fremont, California";
-            await this.addWaypointByAddress(waypointAddress);
-            
-            // Set end point (same as start)
-            console.log('📍 Setting end point...');
-            if (startResult) {
-                const endLatlng = L.latLng(parseFloat(startResult.lat), parseFloat(startResult.lon));
-                this.setEndPoint(endLatlng);
-                console.log(`✅ End point set to: ${startResult.display_name}`);
-            }
-            
-            // Show notification
-            this.showNotification('Test route setup complete! Click "Generate Route" to see the route.', 'success');
-            console.log('🎉 Test route setup complete!');
-            
-        } catch (error) {
-            console.error('❌ Test route setup error:', error);
-            this.showNotification('Failed to setup test route', 'error');
-        }
-    }
-    
     async tryResolveAddress(address) {
         try {
             console.log(`🔍 Searching for: ${address}`);
@@ -2588,34 +2527,3 @@ class BikeRoutePlanner {
         this.updateWaypointCounter();
     }
 }
-
-// Add test button for specific route
-document.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 DOM loaded, adding test button...');
-    
-    setTimeout(() => {
-        const testButton = document.createElement('button');
-        testButton.textContent = '🧪 Test Fremont Route';
-        testButton.style.cssText = `
-            position: fixed;
-            top: 80px;
-            right: 20px;
-            background: #4CAF50;
-            color: white;
-            padding: 10px 15px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 0.9rem;
-            font-weight: 500;
-            z-index: 10000;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-        `;
-        
-        testButton.addEventListener('click', () => {
-            app.setupTestRoute();
-        });
-        
-        document.body.appendChild(testButton);
-    }, 1000);
-});
