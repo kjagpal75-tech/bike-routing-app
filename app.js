@@ -1,6 +1,51 @@
 // DEBUG: This should appear at the very top of the console
-console.log('🚀 APP.JS LOADED - VERSION 2.2.3 WITH TIMESTAMP');
+console.log('🚀 APP.JS LOADED - VERSION 2.2.4 WITH TIMESTAMP');
 console.log('🚀 CURRENT TIME:', new Date().toISOString());
+
+// Update debug indicator on page
+const debugIndicator = document.getElementById('debugIndicator');
+if (debugIndicator) {
+    debugIndicator.textContent = '🚀 LOADED: app.js v2.2.4';
+    debugIndicator.style.background = 'green';
+}
+
+// Add compact debug panel
+const debugPanel = document.createElement('div');
+debugPanel.id = 'debugPanel';
+debugPanel.style.cssText = `
+    position: fixed;
+    top: 60px;
+    right: 10px;
+    background: rgba(0,0,0,0.8);
+    color: white;
+    padding: 10px;
+    border-radius: 5px;
+    z-index: 9999;
+    font-family: monospace;
+    font-size: 11px;
+    max-width: 300px;
+`;
+document.body.appendChild(debugPanel);
+
+// Update debug panel helper
+window.updateDebugPanel = (key, value) => {
+    const panel = document.getElementById('debugPanel');
+    if (panel) {
+        const timestamp = new Date().toLocaleTimeString();
+        panel.innerHTML += `<div>[${timestamp}] ${key}: ${value}</div>`;
+        // Keep only last 10 lines
+        const lines = panel.innerHTML.split('<div>');
+        if (lines.length > 10) {
+            panel.innerHTML = lines.slice(-10).join('<div>');
+        }
+    }
+};
+
+// Wait for DOM to be ready before initializing
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('🚀 DOM ready, initializing BikeRoutePlanner');
+    new BikeRoutePlanner();
+});
 
 class BikeRoutePlanner {
     constructor() {
@@ -18,13 +63,40 @@ class BikeRoutePlanner {
     }
     
     initMap() {
-        // Initialize map centered on a cycling-friendly area
-        this.map = L.map('map').setView([40.7128, -74.0060], 13);
+        console.log('🗺️ Initializing map...');
         
-        // Add OpenStreetMap tiles
+        // Wait for DOM to be ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                this.createMap();
+            });
+        } else {
+            this.createMap();
+        }
+    }
+    
+    createMap() {
+        console.log('🗺️ Creating map container...');
+        
+        // Check if map container exists
+        const mapContainer = document.getElementById('map');
+        if (!mapContainer) {
+            console.error('❌ Map container not found');
+            this.showNotification('Map container not found. Please refresh the page.', 'error');
+            return;
+        }
+        
+        console.log('✅ Map container found, creating Leaflet map');
+        
+        // Initialize the map
+        this.map = L.map('map').setView([37.7749, -122.4194], 12);
+        
+        // Add tile layer
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors'
         }).addTo(this.map);
+        
+        console.log('🗺️ Map initialized successfully');
         
         // Add click handler to map
         this.map.on('click', (e) => this.handleMapClick(e));
@@ -634,7 +706,7 @@ class BikeRoutePlanner {
             const dlng = ((result & 1) ? ~(result >> 1) : (result >> 1));
             lng += dlng;
             
-            points.push([lat / 1e5, lng / 1e5]);
+            points.push([lat / 1e6, lng / 1e6]);
         }
         
         return points.map(coord => L.latLng(coord[0], coord[1]));
@@ -1364,6 +1436,9 @@ class BikeRoutePlanner {
             console.log(`🌐 Using routing API: ${routingApi}`);
             console.log(`🔄 Return to start: ${returnToStart}`);
             
+            // Store Valhalla profile for use in response processing
+            let valhallaProfile = null;
+            
             // Provide information about route type
             const routeTypeInfo = this.getRouteTypeDescription(routeType);
             if (routeType === 'drive') {
@@ -1385,11 +1460,11 @@ class BikeRoutePlanner {
                 }
                 apiUrl = `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${routeType}/${coordsStr}?access_token=${mapboxToken}&geometries=geojson&steps=true&overview=full`;
             } else if (routingApi === 'valhalla') {
-                // Valhalla Directions API - multiple fallback approaches
-                // Map route types to Valhalla profiles
-                const valhallaProfile = routeType === 'drive' ? 'auto' : routeType === 'cycling' ? 'bicycle' : 'pedestrian';
+                // Valhalla Directions API - use correct API endpoint
+                // Map route types to Valhalla profiles (bicycle for bike-friendly routes)
+                valhallaProfile = routeType === 'drive' ? 'bicycle' : routeType === 'cycling' ? 'bicycle' : 'pedestrian';
                 
-                // Build the JSON data
+                // Build JSON request for Valhalla API
                 const valhallaData = {
                     locations: coordinates.map(coord => ({
                         lat: coord.lat,
@@ -1401,59 +1476,15 @@ class BikeRoutePlanner {
                     units: 'kilometers'
                 };
                 
-                // Try different approaches in order of preference
-                // Check if running locally - if so, use local proxy for direct Valhalla access
-                const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+                // Use correct Valhalla API endpoint
+                apiUrl = `https://valhalla1.openstreetmap.de/route?json=${encodeURIComponent(JSON.stringify(valhallaData))}`;
+                console.log(`🛣️ Valhalla API URL: ${apiUrl}`);
+                console.log(`🛣️ Using profile: ${valhallaProfile}`);
+                console.log(`🛣️ Note: Using valhalla1.openstreetmap.de API endpoint`);
                 
-                const approaches = [
-                    // 1. Local proxy for Valhalla API (using working valhalla1 endpoint)
-                    ...(isLocalhost ? [{
-                        url: `/valhalla/route?json=${encodeURIComponent(JSON.stringify(valhallaData))}`,
-                        name: 'Valhalla (local proxy - working API)',
-                        processor: 'valhalla',
-                        method: 'GET',
-                        body: null
-                    }] : []),
-                    // 2. Direct Valhalla1 API (working endpoint, no proxy needed)
-                    {
-                        url: `https://valhalla1.openstreetmap.de/route?json=${encodeURIComponent(JSON.stringify(valhallaData))}`,
-                        name: 'Valhalla (direct API - Morrison Canyon Road)',
-                        processor: 'valhalla',
-                        method: 'GET'
-                    },
-                    // 3. CORS proxies for Valhalla API (using correct endpoint)
-                    {
-                        url: `https://corsproxy.io/?https://valhalla1.openstreetmap.de/route?json=${encodeURIComponent(JSON.stringify(valhallaData))}`,
-                        name: 'Valhalla (authentic routing) - corsproxy.io',
-                        processor: 'valhalla',
-                        method: 'GET'
-                    },
-                    // 3. Direct OSRM (fallback, no CORS issues but different routing)
-                    {
-                        url: `https://router.project-osrm.org/route/v1/${valhallaProfile}/${coordinates.map(c => `${c.lng},${c.lat}`).join(';')}?overview=full&geometries=geojson&steps=true`,
-                        name: 'OSRM (fallback - different routing)',
-                        processor: 'osrm',
-                        method: 'GET'
-                    }
-                ];
-                
-                // Use first approach by default
-                apiUrl = approaches[0].url;
-                this.currentApproach = approaches[0];
-                this.valhallaApproaches = approaches;
-                
-                console.log(`🛣️ Using approach: ${approaches[0].name}`);
-                console.log(`🛣️ API URL: ${apiUrl}`);
-                if (approaches[0].name.includes('Valhalla')) {
-                    console.log(`🛣️ 🎉 Using working Valhalla API with Morrison Canyon Road routing!`);
-                    console.log(`🛣️ 🛣️ Authentic Valhalla routing preferences available!`);
-                    if (isLocalhost) {
-                        console.log(`🛣️ 💡 If proxy server not running, use: python3 proxy-server.py`);
-                    }
-                } else {
-                    console.log(`🛣️ 💡 For best results, run locally: python3 proxy-server.py`);
-                    console.log(`🛣️ 💡 Then visit: http://localhost:8000 for direct API access`);
-                }
+                window.updateDebugPanel('APPROACH', 'Valhalla direct');
+                window.updateDebugPanel('API', 'Valhalla');
+                window.updateDebugPanel('PROFILE', valhallaProfile);
             } else if (routingApi === 'graphhopper') {
                 // GraphHopper Directions API
                 const graphhopperToken = this.getGraphhopperToken();
@@ -1528,84 +1559,13 @@ class BikeRoutePlanner {
             }
             
             console.log(`🌐 API URL: ${apiUrl}`);
-            const currentApproach = this.currentApproach;
             const response = await fetch(apiUrl, {
-                method: currentApproach.method || 'GET',
-                headers: currentApproach.method === 'POST' ? {
-                    'Content-Type': 'application/json'
-                } : {},
-                body: currentApproach.body || null,
+                method: 'GET',
+                headers: {},
                 mode: 'cors'
             });
             
-            // Clear request body after use
-            this.orsRequestBody = null;
-            
             let data = await response.json();
-            
-            // Handle CORS proxy response
-            if (apiUrl.includes('corsproxy.io') || apiUrl.includes('api.allorigins.win') || apiUrl.includes('cors-anywhere.herokuapp.com')) {
-                try {
-                    // Check if response is HTML (proxy error page)
-                    if (typeof data === 'string' && data.includes('<!DOCTYPE')) {
-                        throw new Error('CORS proxy returned HTML error page');
-                    }
-                    
-                    // Different proxies have different response formats
-                    if (apiUrl.includes('api.allorigins.win')) {
-                        data = typeof data.contents === 'string' ? JSON.parse(data.contents) : data.contents;
-                    } else if (apiUrl.includes('corsproxy.io')) {
-                        data = typeof data === 'string' ? JSON.parse(data) : data;
-                    } else {
-                        data = typeof data === 'string' ? JSON.parse(data) : data;
-                    }
-                    console.log(`🛣️ CORS proxy response parsed:`, data);
-                } catch (parseError) {
-                    console.error('❌ Failed to parse CORS proxy response:', parseError);
-                    console.error('❌ Response received:', data);
-                    
-                    // Try fallback approach for Valhalla
-                    if (routingApi === 'valhalla' && this.valhallaApproaches && this.valhallaApproaches.length > 1) {
-                        console.log('🔄 CORS proxy failed, trying OSRM fallback...');
-                        console.log('🔄 Note: OSRM uses different routing preferences than Valhalla');
-                        console.log('🔄 For authentic Valhalla routing (Morrison Canyon Road), run app locally');
-                        
-                        const fallbackApproach = this.valhallaApproaches[1];
-                        apiUrl = fallbackApproach.url;
-                        this.currentApproach = fallbackApproach;
-                        
-                        console.log(`🔄 Using fallback: ${fallbackApproach.name}`);
-                        console.log(`🔄 Fallback URL: ${apiUrl}`);
-                        
-                        // Retry with fallback
-                        const retryResponse = await fetch(apiUrl);
-                        const retryData = await retryResponse.json();
-                        data = retryData;
-                        
-                        // Process fallback response
-                        if (fallbackApproach.processor === 'osrm') {
-                            route = data.routes[0];
-                            routePoints = route.geometry.coordinates.map(coord => L.latLng(coord[1], coord[0]));
-                            routeFound = true;
-                            console.log('🛣️ OSRM fallback route data extracted:', route);
-                            console.log('🛣️ OSRM may use different roads than Valhalla');
-                        } else {
-                            route = data.routes[0];
-                            if (route.geometry) {
-                                routePoints = this.decodePolyline(route.geometry);
-                            } else {
-                                routePoints = [];
-                            }
-                            routeFound = true;
-                            console.log('🛣️ Valhalla fallback route data extracted:', route);
-                        }
-                    } else {
-                        console.error('❌ All Valhalla approaches failed');
-                        this.showNotification('Valhalla routing failed. For authentic Valhalla routing via Morrison Canyon Road, run app locally: python -m http.server 8000', 'error');
-                        throw new Error(`CORS proxy failed: ${parseError.message}`);
-                    }
-                }
-            }
             console.log(`🌐 API Response:`, data);
             console.log(`🌐 Response keys:`, Object.keys(data));
             
@@ -1769,69 +1729,45 @@ class BikeRoutePlanner {
                 }
                 
             } else if (routingApi === 'valhalla') {
-                console.log(`🛣️ Valhalla response structure:`, {
-                    trip: data.trip,
-                    legs: data.trip?.legs,
-                    legsLength: data.trip?.legs?.length,
-                    firstLeg: data.trip?.legs?.[0],
-                    maneuvers: data.trip?.legs?.[0]?.maneuvers
-                });
-                
-                // Handle different response formats based on approach
-                if (this.currentApproach && this.currentApproach.processor === 'osrm') {
-                    // OSRM format processing (when using OSRM as Valhalla alternative)
-                    if (!data.routes || data.routes.length === 0) {
-                        console.error('❌ No routes found in OSRM response');
-                        this.showNotification('No route found with OSRM API', 'error');
-                        routeFound = false;
-                    } else {
-                        route = data.routes[0];
-                        routePoints = route.geometry.coordinates.map(coord => L.latLng(coord[1], coord[0]));
-                        routeFound = true;
-                        console.log('🛣️ OSRM route data extracted:', route);
-                    }
+                // Valhalla returns trip structure, not routes
+                if (!data.trip || !data.trip.legs || data.trip.legs.length === 0) {
+                    console.error('❌ No trip found in Valhalla response');
+                    this.showNotification('No route found with Valhalla API', 'error');
+                    routeFound = false;
                 } else {
-                    // Valhalla format processing (when using true Valhalla API)
-                    if (!data.trip || !data.trip.legs || data.trip.legs.length === 0) {
-                        console.error('❌ No trip found in Valhalla response');
-                        this.showNotification('No route found with Valhalla API', 'error');
-                        routeFound = false;
-                    } else {
-                        // Valhalla API returns trip structure with legs
-                        const trip = data.trip;
-                        
-                        console.log('🛣️ Full Valhalla response:', JSON.stringify(trip, null, 2));
-                        
-                        // Create a consistent route structure for the app
-                        route = {
-                            legs: trip.legs,
-                            distance: trip.summary.length,
-                            duration: trip.summary.time,
-                            geometry: {
-                                coordinates: trip.shape ? this.decodePolyline(trip.shape) : []
-                            }
-                        };
-                        
-                        // Valhalla returns geometry as encoded polyline in shape (inside legs[0])
-                        if (trip.legs && trip.legs[0] && trip.legs[0].shape) {
-                            // Decode Valhalla polyline to coordinates
-                            console.log('🛣️ Decoding Valhalla polyline from legs[0].shape:', trip.legs[0].shape.substring(0, 100) + '...');
-                            routePoints = this.decodePolyline(trip.legs[0].shape);
-                            console.log('🛣️ Decoded routePoints:', routePoints.length, 'points');
-                            console.log('🛣️ First point:', routePoints[0]);
-                            console.log('🛣️ Last point:', routePoints[routePoints.length - 1]);
-                        } else {
-                            console.log('🛣️ No shape data in Valhalla response');
-                            console.log('🛣️ Available keys in trip:', Object.keys(trip));
-                            console.log('🛣️ Legs available:', trip.legs ? trip.legs.length : 'none');
-                            if (trip.legs && trip.legs[0]) {
-                                console.log('🛣️ Keys in legs[0]:', Object.keys(trip.legs[0]));
-                            }
-                            routePoints = [];
+                    // Valhalla API returns trip structure with legs
+                    const trip = data.trip;
+                    
+                    // Create a consistent route structure for the app
+                    route = {
+                        legs: trip.legs,
+                        distance: trip.summary.length * 1000, // Convert km to meters
+                        duration: trip.summary.time, // Time is already in seconds
+                        geometry: {
+                            coordinates: trip.shape ? this.decodePolyline(trip.shape) : []
                         }
-                        routeFound = true;
-                        console.log('🛣️ Valhalla route data extracted:', trip);
+                    };
+                    
+                    // Decode Valhalla polyline to coordinates
+                    // Shape data is in trip.legs[0].shape, not trip.shape
+                    const shapeData = trip.legs && trip.legs[0] ? trip.legs[0].shape : null;
+                    if (shapeData) {
+                        console.log('🛣️ Decoding Valhalla polyline from trip.legs[0].shape:', shapeData.substring(0, 100) + '...');
+                        routePoints = this.decodePolyline(shapeData);
+                        console.log('🛣️ Decoded routePoints:', routePoints.length, 'points');
+                        console.log('🛣️ First point:', routePoints[0]);
+                        console.log('🛣️ Last point:', routePoints[routePoints.length - 1]);
+                    } else {
+                        console.log('🛣️ No shape data found in Valhalla response');
+                        console.log('🛣️ Available keys in trip:', Object.keys(trip));
+                        if (trip.legs && trip.legs[0]) {
+                            console.log('🛣️ Keys in trip.legs[0]:', Object.keys(trip.legs[0]));
+                        }
+                        routePoints = [];
                     }
+                    routeFound = true;
+                    console.log('🛣️ Valhalla route data extracted:', trip);
+                    console.log('🛣️ Using profile:', valhallaProfile);
                 }
             } else if (routingApi === 'osrm') {
                 // OSRM format
@@ -1853,18 +1789,27 @@ class BikeRoutePlanner {
             console.log('🛣️ routingApi:', routingApi);
             console.log('🛣️ === END ROUTE PROCESSING DEBUG ===');
             
+            // Update debug panel with key info
+            window.updateDebugPanel('ROUTE_FOUND', routeFound ? 'YES' : 'NO');
+            window.updateDebugPanel('ROUTE_POINTS', routePoints.length);
+            window.updateDebugPanel('API_TYPE', routingApi);
+            
             if (routeFound) {
                 // Store current route data for unit conversion
                 this.currentRouteData = route;
                 
-                console.log(`🛣️ About to display route with routePoints: ${routePoints.length} points`);
+                console.log('🛣️ About to display route with routePoints:', routePoints.length, 'points');
                 console.log('🛣️ routePoints sample:', routePoints.slice(0, 3));
                 console.log('🛣️ routePoints type:', typeof routePoints[0]);
                 console.log('🛣️ routePoints[0] lat/lng:', routePoints[0] ? [routePoints[0].lat, routePoints[0].lng] : 'undefined');
                 
+                // Update debug panel
+                window.updateDebugPanel('MAP_DISPLAY', 'STARTING');
+                
                 // Validate routePoints before display
                 if (!routePoints || routePoints.length === 0) {
                     console.error('❌ No valid routePoints for display');
+                    window.updateDebugPanel('MAP_ERROR', 'NO_POINTS');
                     this.showNotification('No route points available for map display', 'error');
                     return;
                 }
@@ -1873,6 +1818,7 @@ class BikeRoutePlanner {
                 const firstPoint = routePoints[0];
                 if (!firstPoint || typeof firstPoint.lat !== 'number' || typeof firstPoint.lng !== 'number') {
                     console.error('❌ Invalid coordinates in routePoints:', firstPoint);
+                    window.updateDebugPanel('MAP_ERROR', 'INVALID_COORDS');
                     this.showNotification('Invalid route coordinates for map display', 'error');
                     return;
                 }
@@ -1881,6 +1827,7 @@ class BikeRoutePlanner {
                 console.log('🛣️ Validating bounds with last point:', routePoints[routePoints.length - 1]);
                 console.log('🛣️ Proceeding to display route...');
                 
+                window.updateDebugPanel('MAP_BOUNDS', 'VALID');
                 this.displayRoute(routePoints, route);
                 
                 // Handle different step formats for different APIs
@@ -1930,7 +1877,20 @@ class BikeRoutePlanner {
     }
     
     displayRoute(routePoints, routeData) {
+        console.log('🗺️ displayRoute called with', routePoints.length, 'points');
+        console.log('🗺️ Map object exists:', !!this.map);
+        
+        // Update debug panel
+        window.updateDebugPanel('MAP_RENDER', 'STARTING');
+        
+        if (!this.map) {
+            console.error('❌ Map object not available');
+            window.updateDebugPanel('MAP_ERROR', 'NO_MAP');
+            return;
+        }
+        
         if (this.routeLayer) {
+            console.log('🗺️ Removing existing route layer');
             this.map.removeLayer(this.routeLayer);
         }
         
@@ -1952,6 +1912,21 @@ class BikeRoutePlanner {
             routeWeight = 4;
         }
         
+        console.log('🗺️ Creating polyline with', routePoints.length, 'points');
+        console.log('🗺️ Route color:', routeColor);
+        
+        // Debug: Check first few route points
+        console.log('🗺️ First 3 route points:');
+        for (let i = 0; i < Math.min(3, routePoints.length); i++) {
+            const point = routePoints[i];
+            console.log(`  Point ${i}:`, point);
+            console.log(`    Type:`, typeof point);
+            console.log(`    Has lat:`, 'lat' in point);
+            console.log(`    Has lng:`, 'lng' in point);
+            console.log(`    lat:`, point.lat);
+            console.log(`    lng:`, point.lng);
+        }
+        
         this.routeLayer = L.polyline(routePoints, {
             color: routeColor,
             weight: routeWeight,
@@ -1959,9 +1934,47 @@ class BikeRoutePlanner {
             smoothFactor: 1
         }).addTo(this.map);
         
+        console.log('🗺️ Route layer added to map');
+        window.updateDebugPanel('MAP_RENDER', 'SUCCESS');
+        
+        // Debug: Check if layer was added correctly
+        console.log('🗺️ Route layer exists:', !!this.routeLayer);
+        console.log('🗺️ Route layer on map:', this.routeLayer && this.routeLayer._map ? 'YES' : 'NO');
+        
         // Fit map to show entire route
         const bounds = L.latLngBounds(routePoints);
-        this.map.fitBounds(bounds, { padding: [50, 50] });
+        console.log('🗺️ Fitting map to bounds:', bounds);
+        console.log('🗺️ Bounds type:', typeof bounds);
+        console.log('🗺️ Bounds constructor:', bounds.constructor.name);
+        console.log('🗺️ Bounds center:', bounds.getCenter());
+        
+        // Check if bounds has getSize method
+        if (typeof bounds.getSize === 'function') {
+            console.log('🗺️ Bounds size:', bounds.getSize());
+        } else {
+            console.log('🗺️ Bounds has no getSize method, using manual calculation');
+            // Manual bounds calculation
+            const firstPoint = routePoints[0];
+            const lastPoint = routePoints[routePoints.length - 1];
+            const manualBounds = {
+                getCenter: () => L.latLng(
+                    (firstPoint.lat + lastPoint.lat) / 2,
+                    (firstPoint.lng + lastPoint.lng) / 2
+                ),
+                getNorthEast: () => L.latLng(lastPoint.lat, lastPoint.lng),
+                getSouthWest: () => L.latLng(firstPoint.lat, firstPoint.lng)
+            };
+            console.log('🗺️ Manual bounds center:', manualBounds.getCenter());
+            
+            try {
+                this.map.fitBounds(manualBounds, { padding: [50, 50] });
+                console.log('🗺️ Map bounds fitted successfully (manual)');
+                window.updateDebugPanel('MAP_RENDER', 'SUCCESS_MANUAL');
+            } catch (error) {
+                console.error('🗺️ Error fitting bounds:', error);
+                window.updateDebugPanel('MAP_ERROR', 'BOUNDS_ERROR_MANUAL');
+            }
+        }
         
         // Show route info panel
         const routeInfoDiv = document.getElementById('routeInfo');
@@ -2550,12 +2563,10 @@ class BikeRoutePlanner {
     }
 }
 
-// Initialize app when DOM is ready
+// Add test button for specific route
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 DOM loaded, initializing Bike Route Planner...');
-    window.app = new BikeRoutePlanner();
+    console.log('🚀 DOM loaded, adding test button...');
     
-    // Add test button for specific route
     setTimeout(() => {
         const testButton = document.createElement('button');
         testButton.textContent = '🧪 Test Fremont Route';
