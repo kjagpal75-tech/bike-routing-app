@@ -1,5 +1,3 @@
-const fetch = require('node-fetch');
-
 exports.handler = async (event) => {
   // Handle CORS preflight
   if (event.httpMethod === 'OPTIONS') {
@@ -25,7 +23,22 @@ exports.handler = async (event) => {
   }
 
   try {
+    console.log('Received request body:', event.body);
+    
     const { profile, locations } = JSON.parse(event.body);
+    
+    console.log('Parsed request - profile:', profile, 'locations:', locations);
+    
+    // Validate input
+    if (!profile || !locations || !Array.isArray(locations) || locations.length < 2) {
+      return {
+        statusCode: 400,
+        headers: {
+          'Access-Control-Allow-Origin': '*'
+        },
+        body: JSON.stringify({ error: 'Invalid request: profile and locations (min 2) required' })
+      };
+    }
     
     // Build Valhalla request
     const valhallaData = {
@@ -41,7 +54,14 @@ exports.handler = async (event) => {
     console.log('Proxying to Valhalla:', valhallaUrl);
     
     const response = await fetch(valhallaUrl);
+    
+    if (!response.ok) {
+      throw new Error(`Valhalla API error: ${response.status} ${response.statusText}`);
+    }
+    
     const data = await response.json();
+    
+    console.log('Valhalla response received, keys:', Object.keys(data));
     
     return {
       statusCode: 200,
@@ -53,13 +73,17 @@ exports.handler = async (event) => {
     };
     
   } catch (error) {
-    console.error('Proxy error:', error);
+    console.error('Proxy error details:', error);
+    console.error('Error stack:', error.stack);
     return {
       statusCode: 500,
       headers: {
         'Access-Control-Allow-Origin': '*'
       },
-      body: JSON.stringify({ error: 'Internal server error' })
+      body: JSON.stringify({ 
+        error: 'Internal server error',
+        details: error.message 
+      })
     };
   }
 };
