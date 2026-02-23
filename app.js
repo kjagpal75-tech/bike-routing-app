@@ -1,8 +1,12 @@
-// Initialize debug panel for development only (localhost)
+// Initialize debug panel for development only (disabled for clean testing)
 const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+const enableDebugPanel = false; // Set to false for clean testing
 let debugPanel = null;
 
-if (isLocalhost) {
+// Version check - verify latest code is loaded
+console.log('🚴 Bike Route App v2.3.0 - Valhalla Distance Fix Loaded');
+
+if (isLocalhost && enableDebugPanel) {
     debugPanel = document.createElement('div');
     debugPanel.id = 'debugPanel';
     debugPanel.style.cssText = `
@@ -21,9 +25,9 @@ if (isLocalhost) {
     document.body.appendChild(debugPanel);
 }
 
-// Update debug panel helper (only works on localhost)
+// Update debug panel helper (only works when enabled)
 window.updateDebugPanel = (key, value) => {
-    if (!isLocalhost || !debugPanel) return;
+    if (!enableDebugPanel || !isLocalhost || !debugPanel) return;
     
     const timestamp = new Date().toLocaleTimeString();
     debugPanel.innerHTML += `<div>[${timestamp}] ${key}: ${value}</div>`;
@@ -227,58 +231,79 @@ class BikeRoutePlanner {
         }
         
         try {
-            // For known locations, provide hardcoded suggestions
-            if (query.toLowerCase().includes('fremont')) {
-                const fremontResults = [
-                    { display_name: '38695, Dow Court, Fremont, California, United States', lat: '37.548523', lon: '-121.998934' },
-                    { display_name: 'Dow Court, Fremont, California, United States', lat: '37.548523', lon: '-121.998934' },
-                    { display_name: 'Fremont, California, United States', lat: '37.548523', lon: '-121.998934' },
-                    { display_name: 'Central Park, Fremont, California, United States', lat: '37.5495', lon: '-121.9814' },
-                    { display_name: 'Lake Elizabeth, Fremont, California, United States', lat: '37.5488', lon: '-121.9834' }
-                ];
-                this.displaySuggestions(fremontResults, type);
-                return;
+            // Use Photon geocoding API for better accuracy
+            console.log(`🔍 Searching for address: "${query}"`);
+            
+            // Extract street number from query if present
+            const streetNumberMatch = query.match(/^(\d+)\s+(.*)/);
+            const streetNumber = streetNumberMatch ? streetNumberMatch[1] : null;
+            const queryWithoutNumber = streetNumberMatch ? streetNumberMatch[2] : query;
+            
+            console.log(`🔍 Extracted street number: "${streetNumber}"`);
+            console.log(`🔍 Query without number: "${queryWithoutNumber}"`);
+            
+            const response = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(queryWithoutNumber)}&limit=5`, {
+                headers: {
+                    'Accept': 'application/json'
+                }
+            });
+            
+            console.log(`🔍 Photon response status:`, response.status);
+            
+            if (!response.ok) {
+                throw new Error(`Photon API error: ${response.status}`);
             }
             
-            if (query.toLowerCase().includes('san francisco')) {
-                const sfResults = [
-                    { display_name: 'San Francisco, California, United States', lat: '37.7749', lon: '-122.4194' },
-                    { display_name: 'Golden Gate Bridge, San Francisco, California, United States', lat: '37.8199', lon: '-122.4783' },
-                    { display_name: 'Fisherman\'s Wharf, San Francisco, California, United States', lat: '37.8087', lon: '-122.4098' },
-                    { display_name: 'Union Square, San Francisco, California, United States', lat: '37.7879', lon: '-122.4075' }
-                ];
-                this.displaySuggestions(sfResults, type);
-                return;
+            const data = await response.json();
+            console.log(`🔍 Photon raw response:`, data);
+            console.log(`🔍 Photon data type:`, typeof data);
+            console.log(`🔍 Photon data keys:`, Object.keys(data));
+            
+            if (!data || !data.features) {
+                console.log(`🔍 No features in Photon response`);
+                throw new Error('No features in Photon response');
             }
             
-            if (query.toLowerCase().includes('oakland')) {
-                const oaklandResults = [
-                    { display_name: 'Oakland, California, United States', lat: '37.8044', lon: '-122.2711' },
-                    { display_name: 'Jack London Square, Oakland, California, United States', lat: '37.8047', lon: '-122.2726' },
-                    { display_name: 'Lake Merritt, Oakland, California, United States', lat: '37.7953', lon: '-122.2699' }
-                ];
-                this.displaySuggestions(oaklandResults, type);
-                return;
-            }
+            console.log(`🔍 Number of features:`, data.features.length);
             
-            // For other queries, try direct Nominatim (may fail due to CORS)
-            try {
-                const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query + ', California')}&limit=5&addressdetails=1`, {
-                    mode: 'no-cors'
-                });
+            // Convert Photon format to our expected format
+            const results = data.features.map((feature, index) => {
+                console.log(`🔍 Feature ${index}:`, feature);
+                console.log(`🔍 Feature ${index} properties:`, feature.properties);
+                console.log(`🔍 Feature ${index} geometry:`, feature.geometry);
                 
-                // Since we can't read the response due to CORS, we'll provide a fallback
-                console.log('❌ CORS blocked - providing manual suggestions');
-                this.showCORSBlockedMessage(type);
+                // Build display name safely, handling undefined values
+                const parts = [];
+                if (streetNumber) parts.push(streetNumber); // Add street number first
+                if (feature.properties.name && feature.properties.name !== feature.properties.street) parts.push(feature.properties.name);
+                if (feature.properties.street) parts.push(feature.properties.street);
+                if (feature.properties.city) parts.push(feature.properties.city);
+                if (feature.properties.state) parts.push(feature.properties.state);
+                if (feature.properties.country) parts.push(feature.properties.country);
                 
-            } catch (corsError) {
-                console.log('❌ CORS blocked - providing manual suggestions');
-                this.showCORSBlockedMessage(type);
-            }
+                const displayName = parts.join(', ') || 'Unknown location';
+                
+                console.log(`🔍 Built display name: "${displayName}"`);
+                
+                return {
+                    display_name: displayName,
+                    lat: feature.geometry.coordinates[1].toString(),
+                    lon: feature.geometry.coordinates[0].toString()
+                };
+            });
+            
+            console.log(`🔍 Converted results:`, results);
+            this.displaySuggestions(results, type);
             
         } catch (error) {
-            console.error('Address search error:', error);
-            this.showCORSBlockedMessage(type);
+            console.error('❌ Photon geocoding error:', error);
+            console.log('🔄 Falling back to generic suggestions');
+            
+            // Provide generic fallback suggestions
+            const fallbackResults = [
+                { display_name: 'Address not found - try more specific search', lat: '37.5485', lon: '-121.9884' }
+            ];
+            this.displaySuggestions(fallbackResults, type);
         }
     }
     
@@ -1348,6 +1373,13 @@ class BikeRoutePlanner {
         console.log(`📍 Start: ${startLatLng.lat},${startLatLng.lng}`);
         console.log(`📍 End: ${endLatLng.lat},${endLatLng.lng}`);
         console.log(`📍 Waypoints:`, this.waypoints.map(w => `${w.latlng.lat},${w.latlng.lng}`));
+        
+        // Debug: Check if this is a round-trip
+        if (returnToStart && coordinates.length > 2) {
+            console.log(`🔄 ROUND-TRIP DETECTED!`);
+            console.log(`🔄 Expected legs: ${coordinates.length - 1} (start->end->start)`);
+            console.log(`🔄 This should show complete round-trip data in API response`);
+        }
         console.log(`📍 Waypoint precision check:`, this.waypoints.map(w => ({
             lat: w.latlng.lat,
             lng: w.latlng.lng,
@@ -1707,14 +1739,41 @@ class BikeRoutePlanner {
                     // Valhalla API returns trip structure with legs
                     const trip = data.trip;
                     
+                    // Debug: Check if this is a round-trip with multiple legs
+                    console.log(`🛣️ Valhalla legs count: ${trip.legs.length}`);
+                    console.log(`🛣️ Round-trip detected: ${trip.legs.length > 1}`);
+                    
+                    // Debug each leg
+                    trip.legs.forEach((leg, index) => {
+                        console.log(`🛣️ Leg ${index + 1}:`);
+                        console.log(`  - Maneuvers: ${leg.maneuvers ? leg.maneuvers.length : 0}`);
+                        console.log(`  - Summary:`, leg.summary);
+                        console.log(`  - Distance: ${leg.summary?.length} km`);
+                        console.log(`  - Time: ${leg.summary?.time} seconds`);
+                    });
+                    
                     // Create a consistent route structure for the app
+                    // Combine both legs for round-trip data
+                    const totalDistance = trip.legs.reduce((sum, leg) => sum + (leg.summary?.length || 0), 0);
+                    const totalTime = trip.legs.reduce((sum, leg) => sum + (leg.summary?.time || 0), 0);
+                    const allManeuvers = trip.legs.reduce((maneuvers, leg) => 
+                        maneuvers.concat(leg.maneuvers || []), []);
+                    
+                    console.log(`🛣️ Combined round-trip data:`);
+                    console.log(`  - Total distance: ${totalDistance} km`);
+                    console.log(`  - Total time: ${totalTime} seconds`);
+                    console.log(`  - Total maneuvers: ${allManeuvers.length}`);
+                    
                     route = {
                         legs: trip.legs,
-                        distance: trip.summary.length * 1000, // Convert km to meters
-                        duration: trip.summary.time, // Time is already in seconds
+                        distance: totalDistance * 1000, // Convert km to meters
+                        duration: totalTime, // Time in seconds
                         geometry: {
                             coordinates: trip.shape ? this.decodePolyline(trip.shape) : []
-                        }
+                        },
+                        // Add combined data for easier processing
+                        combinedManeuvers: allManeuvers,
+                        isRoundTrip: trip.legs.length > 1
                     };
                     
                     // Decode Valhalla polyline to coordinates
@@ -1800,18 +1859,79 @@ class BikeRoutePlanner {
                 this.displayRoute(routePoints, route);
                 
                 // Handle different step formats for different APIs
+                console.log('🔍 Route structure:', route);
+                console.log('🔍 Route keys:', Object.keys(route));
+                console.log('🔍 Route.legs:', route.legs);
+                console.log('🔍 Current API:', routingApi);
+                
                 if (routingApi === 'valhalla' && route.legs && route.legs[0] && route.legs[0].maneuvers) {
                     // Valhalla uses maneuvers instead of steps
-                    this.displayTurnDirections(route.legs[0].maneuvers);
+                    console.log('🔍 Using Valhalla maneuvers path');
+                    console.log('🔍 Leg 0 structure:', route.legs[0]);
+                    console.log('🔍 Leg 0 keys:', Object.keys(route.legs[0]));
+                    
+                    // Check if this is a round-trip with combined maneuvers
+                    if (route.isRoundTrip && route.combinedManeuvers) {
+                        console.log('🔄 Using combined maneuvers for round-trip');
+                        console.log(`🔄 Total combined maneuvers: ${route.combinedManeuvers.length}`);
+                        console.log('🔄 Combined maneuvers sample:', route.combinedManeuvers.slice(0, 3));
+                        this.displayTurnDirections(route.combinedManeuvers);
+                    } else {
+                        console.log('🔍 Using single leg maneuvers');
+                        console.log(`🔄 Single leg maneuvers: ${route.legs[0].maneuvers.length}`);
+                        this.displayTurnDirections(route.legs[0].maneuvers);
+                    }
+                } else if (routingApi === 'valhalla' && route.legs && route.legs[0]) {
+                    // Check if maneuvers are directly in leg
+                    console.log('🔍 Checking leg 0 for maneuvers...');
+                    console.log('🔍 Leg 0.maneuvers:', route.legs[0].maneuvers);
+                    console.log('🔍 Leg 0 keys:', Object.keys(route.legs[0]));
+                    if (route.legs[0].maneuvers) {
+                        console.log('🔍 Found maneuvers in leg 0');
+                        this.displayTurnDirections(route.legs[0].maneuvers);
+                    } else {
+                        console.log('🔍 No maneuvers in leg 0, checking other fields...');
+                    }
                 } else if (route.legs && route.legs[0] && route.legs[0].steps) {
                     // OSRM and others use steps
+                    console.log('🔍 Using standard steps path');
                     this.displayTurnDirections(route.legs[0].steps);
+                } else {
+                    console.log('🔍 No recognizable step structure found in route');
                 }
                 
                 this.displayRouteInfo(route);
                 
                 // Get elevation data for the route
-                await this.getElevationData(routePoints, route);
+                console.log(`🏔️ Getting elevation data for routePoints: ${routePoints.length} points`);
+                console.log(`🏔️ Route isRoundTrip: ${returnToStart}`);
+                console.log(`🏔️ Route legs count: ${route.legs ? route.legs.length : 'unknown'}`);
+                
+                // Check if this is a round-trip and we need combined route points
+                if (returnToStart && route.legs && route.legs.length > 1) {
+                    console.log(`🏔️ ROUND-TRIP ELEVATION: Combining points from all legs`);
+                    
+                    // For round-trip, we need to get points from all legs
+                    let allRoutePoints = [];
+                    
+                    route.legs.forEach((leg, index) => {
+                        console.log(`🏔️ Processing leg ${index + 1} for elevation`);
+                        
+                        // Decode each leg's shape data
+                        const legShapeData = leg.shape;
+                        if (legShapeData) {
+                            const legPoints = this.decodePolyline(legShapeData);
+                            console.log(`🏔️ Leg ${index + 1} has ${legPoints.length} points`);
+                            allRoutePoints = allRoutePoints.concat(legPoints);
+                        }
+                    });
+                    
+                    console.log(`🏔️ Combined routePoints: ${allRoutePoints.length} total points`);
+                    await this.getElevationData(allRoutePoints, route);
+                } else {
+                    console.log(`🏔️ ONE-WAY ELEVATION: Using single leg points`);
+                    await this.getElevationData(routePoints, route);
+                }
                 
                 console.log(` Route generated using ${routeType} profile`);
                 console.log(` Route distance: ${(route.distance / 1000).toFixed(2)} km`);
@@ -1954,7 +2074,12 @@ class BikeRoutePlanner {
         // Show turn directions panel
         const turnDirectionsDiv = document.getElementById('turnDirections');
         if (turnDirectionsDiv) {
+            console.log('🔍 Showing turnDirections panel, current display:', turnDirectionsDiv.style.display);
             turnDirectionsDiv.style.display = 'block';
+            console.log('🔍 turnDirections panel now set to display:', turnDirectionsDiv.style.display);
+            console.log('🔍 turnDirections panel innerHTML length:', turnDirectionsDiv.innerHTML.length);
+        } else {
+            console.log('🔍 ERROR: turnDirections div not found!');
         }
     }
     
@@ -2031,13 +2156,21 @@ class BikeRoutePlanner {
                 const peakElevation = Math.max(...elevations);
                 const minElevation = Math.min(...elevations);
                 
+                // Calculate gradient statistics
+                const gradientStats = this.calculateGradientStatistics(elevationData.results, routePoints);
+                
                 // Store current elevation data for unit conversion
                 this.currentElevationData = {
                     gain: elevationGain,
                     loss: elevationLoss,
                     peak: peakElevation,
-                    min: minElevation
+                    min: minElevation,
+                    medianGrade: gradientStats.medianGrade,
+                    maxGrade: gradientStats.maxGrade,
+                    minGrade: gradientStats.minGrade
                 };
+                
+                console.log(`🏔️ Gradient statistics: median=${gradientStats.medianGrade}%, max=${gradientStats.maxGrade}%, min=${gradientStats.minGrade}%`);
                 
                 this.displayElevationProfile(elevationData.results, routeData);
             } else {
@@ -2132,6 +2265,9 @@ class BikeRoutePlanner {
         const peakText = this.convertElevation(peak);
         const minText = this.convertElevation(min);
         
+        // Calculate gradient data for the chart
+        const gradients = this.calculateGradientsForChart(elevations, distances);
+        
         elevationDiv.innerHTML = `
             <h3>🏔️ Elevation Profile</h3>
             <div class="elevation-stats">
@@ -2151,112 +2287,246 @@ class BikeRoutePlanner {
                     <span class="stat-label">Min Elevation:</span>
                     <span class="stat-value">${minText}</span>
                 </div>
+                <div class="elevation-stat">
+                    <span class="stat-label">Median Grade:</span>
+                    <span class="stat-value">${this.currentElevationData.medianGrade || 0}%</span>
+                </div>
+                <div class="elevation-stat">
+                    <span class="stat-label">Max Grade:</span>
+                    <span class="stat-value">${this.currentElevationData.maxGrade || 0}%</span>
+                </div>
+                <div class="elevation-stat">
+                    <span class="stat-label">Min Grade:</span>
+                    <span class="stat-value">${this.currentElevationData.minGrade || 0}%</span>
+                </div>
             </div>
             <div class="elevation-chart-container">
-                <canvas id="elevationChart" width="400" height="200"></canvas>
+                <canvas id="elevationChart" width="800" height="300"></canvas>
+            </div>
+            <div class="gradient-legend">
+                <span class="legend-title">Gradient:</span>
+                <span class="legend-item false-flat">False Flat (0-3%)</span>
+                <span class="legend-item moderate">Moderate (4-6%)</span>
+                <span class="legend-item hard">Hard (7-9%)</span>
+                <span class="legend-item severe">Severe (10-15%)</span>
+                <span class="legend-item extreme">Extreme (>15%)</span>
             </div>
         `;
         
-        // Create simple elevation chart using canvas
+        // Create elevation and gradient chart using canvas
         setTimeout(() => {
-            const canvas = document.getElementById('elevationChart');
-            if (canvas) {
-                const ctx = canvas.getContext('2d');
-                const width = canvas.width;
-                const height = canvas.height;
-                
-                // Clear canvas
-                ctx.clearRect(0, 0, width, height);
-                
-                // Set up chart dimensions
-                const padding = 40;
-                const chartWidth = width - padding * 2;
-                const chartHeight = height - padding * 2;
-                
-                // Draw grid lines
-                ctx.strokeStyle = '#e0e0e0';
-                ctx.lineWidth = 1;
-                
-                // Horizontal grid lines
-                for (let i = 0; i <= 5; i++) {
-                    const y = padding + (chartHeight / 5) * i;
-                    ctx.beginPath();
-                    ctx.moveTo(padding, y);
-                    ctx.lineTo(width - padding, y);
-                    ctx.stroke();
-                }
-                
-                // Vertical grid lines
-                for (let i = 0; i <= 10; i++) {
-                    const x = padding + (chartWidth / 10) * i;
-                    ctx.beginPath();
-                    ctx.moveTo(x, padding);
-                    ctx.lineTo(x, height - padding);
-                    ctx.stroke();
-                }
-                
-                // Draw axes
-                ctx.strokeStyle = '#333';
-                ctx.lineWidth = 2;
-                ctx.beginPath();
-                ctx.moveTo(padding, padding);
-                ctx.lineTo(padding, height - padding);
-                ctx.lineTo(width - padding, height - padding);
-                ctx.stroke();
-                
-                // Calculate elevation range
-                const elevationRange = peak - min;
-                const distanceRange = distances[distances.length - 1];
-                
-                // Draw elevation profile
-                ctx.strokeStyle = '#FF6B35';
-                ctx.lineWidth = 3;
-                ctx.beginPath();
-                
-                for (let i = 0; i < elevations.length; i++) {
-                    const x = padding + (distances[i] / distanceRange) * chartWidth;
-                    const y = padding + chartHeight - ((elevations[i] - min) / elevationRange) * chartHeight;
-                    
-                    if (i === 0) {
-                        ctx.moveTo(x, y);
-                    } else {
-                        ctx.lineTo(x, y);
-                    }
-                }
-                ctx.stroke();
-                
-                // Draw labels
-                ctx.fillStyle = '#333';
-                ctx.font = '12px Arial';
-                ctx.textAlign = 'center';
-                
-                // X-axis labels (distance)
-                const useImperial = document.getElementById('useImperialUnits');
-                const isImperial = useImperial ? useImperial.checked : false;
-                
-                for (let i = 0; i <= 5; i++) {
-                    const distance = (distanceRange / 5) * i; // distance in meters
-                    const x = padding + (chartWidth / 5) * i;
-                    const label = isImperial ? 
-                        (distance * 0.621371 / 1000).toFixed(1) + ' mi' : // meters → miles
-                        (distance / 1000).toFixed(1) + ' km'; // meters → km
-                    ctx.fillText(label, x, height - 20);
-                }
-                
-                // Y-axis labels (elevation)
-                ctx.textAlign = 'right';
-                for (let i = 0; i <= 5; i++) {
-                    const elevation = min + (elevationRange / 5) * i;
-                    const y = padding + chartHeight - (chartHeight / 5) * i;
-                    const label = isImperial ? 
-                        (elevation * 3.28084).toFixed(0) + ' ft' : 
-                        elevation.toFixed(0) + ' m';
-                    ctx.fillText(label, padding - 5, y + 4);
-                }
-                
-                console.log('🏔️ Elevation chart rendered with grid lines');
-            }
+            this.drawElevationAndGradientChart(elevations, gradients, distances);
         }, 100);
+    }
+    
+    calculateGradientsForChart(elevations, distances) {
+        const gradients = [];
+        
+        for (let i = 0; i < elevations.length - 1; i++) {
+            const elevationChange = elevations[i + 1] - elevations[i];
+            const distanceChange = distances[i + 1] - distances[i];
+            
+            if (distanceChange > 0) {
+                const gradient = (elevationChange / distanceChange) * 100;
+                gradients.push(Math.max(-25, Math.min(25, gradient))); // Clamp to realistic range
+            } else {
+                gradients.push(0);
+            }
+        }
+        
+        return gradients;
+    }
+    
+    drawElevationAndGradientChart(elevations, gradients, distances) {
+        const canvas = document.getElementById('elevationChart');
+        if (!canvas) return;
+        
+        const ctx = canvas.getContext('2d');
+        const width = canvas.width;
+        const height = canvas.height;
+        
+        // Check user's unit preference
+        const useImperialUnits = document.getElementById('useImperialUnits')?.checked || false;
+        
+        // Clear canvas
+        ctx.clearRect(0, 0, width, height);
+        
+        // Set up chart dimensions
+        const padding = 40;
+        const chartWidth = width - 2 * padding;
+        const chartHeight = height - 2 * padding;
+        
+        // Calculate scales
+        const minElevation = Math.min(...elevations);
+        const maxElevation = Math.max(...elevations);
+        const elevationRange = maxElevation - minElevation;
+        
+        // Draw grid lines
+        ctx.strokeStyle = '#e0e0e0';
+        ctx.lineWidth = 1;
+        
+        // Horizontal grid lines
+        for (let i = 0; i <= 5; i++) {
+            const y = padding + (chartHeight / 5) * i;
+            ctx.beginPath();
+            ctx.moveTo(padding, y);
+            ctx.lineTo(width - padding, y);
+            ctx.stroke();
+        }
+        
+        // Vertical grid lines
+        for (let i = 0; i <= 10; i++) {
+            const x = padding + (chartWidth / 10) * i;
+            ctx.beginPath();
+            ctx.moveTo(x, padding);
+            ctx.lineTo(x, height - padding);
+            ctx.stroke();
+        }
+        
+        // Draw elevation profile
+        ctx.strokeStyle = '#4CAF50';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        
+        elevations.forEach((elevation, i) => {
+            const x = padding + (i / (elevations.length - 1)) * chartWidth;
+            const y = padding + chartHeight - ((elevation - minElevation) / elevationRange) * chartHeight;
+            
+            if (i === 0) {
+                ctx.moveTo(x, y);
+            } else {
+                ctx.lineTo(x, y);
+            }
+        });
+        
+        ctx.stroke();
+        
+        // Draw gradient overlay with color coding (enhanced full coverage)
+        gradients.forEach((gradient, i) => {
+            const x1 = padding + (i / (gradients.length - 1)) * chartWidth;
+            const x2 = padding + ((i + 1) / (gradients.length - 1)) * chartWidth;
+            
+            // Color based on gradient difficulty (cyclist-friendly categories)
+            let color;
+            const absGradient = Math.abs(gradient);
+            if (absGradient <= 3) {
+                color = 'rgba(76, 175, 80, 0.4)'; // Green - False Flat (0-3%) - Increased opacity
+            } else if (absGradient <= 6) {
+                color = 'rgba(255, 152, 0, 0.4)'; // Orange - Moderate (4-6%) - Increased opacity
+            } else if (absGradient <= 9) {
+                color = 'rgba(255, 87, 34, 0.4)'; // Red - Hard (7-9%) - Increased opacity
+            } else if (absGradient <= 15) {
+                color = 'rgba(156, 39, 176, 0.4)'; // Purple - Severe (10-15%) - Increased opacity
+            } else {
+                color = 'rgba(121, 85, 72, 0.4)'; // Brown - Extreme (>15%) - Increased opacity
+            }
+            
+            // Draw full-height gradient rectangle with enhanced coverage
+            ctx.fillStyle = color;
+            ctx.fillRect(x1, padding, x2 - x1, chartHeight);
+            
+            // Add subtle border between gradient changes for better definition
+            if (i > 0) {
+                const prevGradient = gradients[i - 1];
+                const prevAbsGradient = Math.abs(prevGradient);
+                let prevColor;
+                
+                if (prevAbsGradient <= 3) {
+                    prevColor = 'rgba(76, 175, 80, 0.6)';
+                } else if (prevAbsGradient <= 6) {
+                    prevColor = 'rgba(255, 152, 0, 0.6)';
+                } else if (prevAbsGradient <= 9) {
+                    prevColor = 'rgba(255, 87, 34, 0.6)';
+                } else if (prevAbsGradient <= 15) {
+                    prevColor = 'rgba(156, 39, 176, 0.6)';
+                } else {
+                    prevColor = 'rgba(121, 85, 72, 0.6)';
+                }
+                
+                // Draw transition line if gradient category changes
+                if (Math.floor(absGradient / 3) !== Math.floor(prevAbsGradient / 3)) {
+                    ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.moveTo(x1, padding);
+                    ctx.lineTo(x1, height - padding);
+                    ctx.stroke();
+                }
+            }
+        });
+        
+        // Draw axes labels
+        ctx.fillStyle = '#333';
+        ctx.font = '12px Arial';
+        
+        // Y-axis labels (elevation)
+        ctx.textAlign = 'right';
+        for (let i = 0; i <= 5; i++) {
+            const elevation = minElevation + (elevationRange / 5) * (5 - i);
+            const y = padding + (chartHeight / 5) * i;
+            const elevationText = useImperialUnits ? 
+                Math.round(elevation * 3.28084) + ' ft' : 
+                Math.round(elevation) + ' m';
+            ctx.fillText(elevationText, padding - 5, y + 4);
+        }
+        
+        // X-axis labels (distance)
+        ctx.textAlign = 'center';
+        const totalDistance = distances[distances.length - 1] || 1000; // fallback to 1km
+        const distanceStep = Math.ceil(totalDistance / 5 / 1000) * 1000; // Round to nearest km
+        const numSteps = Math.ceil(totalDistance / distanceStep);
+        
+        for (let i = 0; i <= numSteps; i++) {
+            const distance = i * distanceStep;
+            const x = padding + (distance / totalDistance) * chartWidth;
+            
+            // Draw distance label
+            const distanceText = useImperialUnits ? 
+                (distance * 0.621371 / 1000).toFixed(1) + ' mi' : 
+                (distance / 1000).toFixed(1) + ' km';
+            ctx.fillText(distanceText, x, height - padding + 20);
+            
+            // Draw vertical grid line
+            ctx.strokeStyle = '#e0e0e0';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(x, padding);
+            ctx.lineTo(x, height - padding);
+            ctx.stroke();
+        }
+        
+        // Draw x-axis line
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(padding, height - padding);
+        ctx.lineTo(width - padding, height - padding);
+        ctx.stroke();
+        
+        // Title
+        ctx.font = '14px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('Elevation Profile with Gradient Overlay', width / 2, 20);
+    }
+    
+    calculateElevationGain(elevations) {
+        let gain = 0;
+        for (let i = 1; i < elevations.length; i++) {
+            if (elevations[i] > elevations[i-1]) {
+                gain += elevations[i] - elevations[i-1];
+            }
+        }
+        return gain;
+    }
+    
+    calculateElevationLoss(elevations) {
+        let loss = 0;
+        for (let i = 1; i < elevations.length; i++) {
+            if (elevations[i] < elevations[i-1]) {
+                loss += elevations[i-1] - elevations[i];
+            }
+        }
+        return loss;
     }
     
     displayElevationStats(gain, loss, peak, min, routeData) {
@@ -2328,8 +2598,14 @@ class BikeRoutePlanner {
     }
     
     displayTurnDirections(steps) {
+        console.log('🚨 displayTurnDirections called with steps:', steps.length);
+        console.log('🚨 Steps data:', steps);
+        
         const directionsDiv = document.getElementById('turnDirections');
-        if (!directionsDiv) return;
+        if (!directionsDiv) {
+            console.log('🚨 turnDirections div not found!');
+            return;
+        }
         
         directionsDiv.innerHTML = '<h3>🚴 Turn-by-Turn Directions</h3>';
         
@@ -2341,7 +2617,12 @@ class BikeRoutePlanner {
         const routingApi = document.getElementById('routingApi');
         const apiType = routingApi ? routingApi.value : 'osrm';
         
+        console.log(`🔍 Processing directions for API type: ${apiType}`);
+        console.log(`🔍 Total steps received: ${steps.length}`);
+        console.log(`🔍 First step structure:`, steps[0]);
+        
         if (apiType === 'mapbox') {
+            console.log('🔍 Using Mapbox processing');
             // Mapbox API format
             processedSteps = steps.legs[0].steps.map((step, index) => ({
                 instruction: step.maneuver.instruction || 'Continue',
@@ -2350,6 +2631,7 @@ class BikeRoutePlanner {
                 maneuver: step.maneuver || {}
             }));
         } else if (apiType === 'graphhopper') {
+            console.log('🔍 Using GraphHopper processing');
             // GraphHopper API format
             processedSteps = steps.paths[0].instructions.map((step, index) => ({
                 instruction: step.text || 'Continue',
@@ -2358,6 +2640,7 @@ class BikeRoutePlanner {
                 maneuver: step.maneuver || {}
             }));
         } else if (apiType === 'openrouteservice') {
+            console.log('🔍 Using OpenRouteService processing');
             // OpenRouteService API format
             processedSteps = steps.features[0].properties.segments.map((step, index) => ({
                 instruction: step.instruction || 'Continue',
@@ -2366,52 +2649,59 @@ class BikeRoutePlanner {
                 maneuver: step.maneuver || {}
             }));
         } else if (apiType === 'valhalla') {
-            // Valhalla API format - uses maneuvers
+            console.log('🔍 Using Valhalla processing');
+            // Valhalla API format - distance/time are directly in step, not maneuver
             processedSteps = steps.map((step, index) => {
-                // Valhalla stores distance in 'length' and time in 'time' fields
-                const maneuverLength = step.maneuver?.length || 0;
-                const maneuverTime = step.maneuver?.time || 0;
-                console.log(`🔍 Valhalla Step ${index + 1}:`);
-                console.log(`  Instruction: "${step.instruction || step.maneuver?.instruction}"`);
-                console.log(`  maneuver.length: ${maneuverLength}`);
-                console.log(`  maneuver.time: ${maneuverTime}`);
+                // Valhalla stores distance in 'length' and time in 'time' fields directly in step
+                const stepLength = step.length || 0;
+                const stepTime = step.time || 0;
                 
                 // Convert km to meters (Valhalla returns length in km)
-                const distance = maneuverLength * 1000;
+                const distance = stepLength * 1000;
                 // Time is in seconds, will convert to minutes in display
                 
-                console.log(`  Final distance: ${distance}m, time: ${maneuverTime}s`);
+                console.log(`Processing Valhalla step ${index + 1}: length=${stepLength}km, time=${stepTime}s → distance=${distance}m`);
                 
                 return {
-                    instruction: step.instruction || step.maneuver?.instruction || 'Continue',
+                    instruction: step.instruction || 'Continue',
                     distance: distance,
-                    duration: maneuverTime, // Keep in seconds for conversion
-                    maneuver: step
+                    duration: stepTime,
+                    maneuver: step // Store full step for street name access
                 };
             });
         } else {
+            console.log('🔍 Using OSRM processing (default)');
             // OSRM API format
             processedSteps = steps;
         }
         
+        console.log(`🔍 Processed ${processedSteps.length} steps for display`);
+        
         processedSteps.forEach((step, index) => {
             const instruction = step.instruction || step.html_instructions || 'Continue';
+            
+            // Use the processed distance and duration values
             const distance = this.convertDistance(step.distance);
             const duration = Math.round((step.duration || 0) / 60);
             
-            // Debug: Log distance values to verify they're correct
-            console.log(`📍 Step ${index + 1}: "${instruction}"`);
-            console.log(`  Raw distance: ${step.distance}m`);
-            console.log(`  Converted distance: ${distance}`);
-            console.log(`  Duration: ${duration}min`);
+            // Debug: Log each step creation
+            console.log(`🔍 Creating step ${index + 1}/${processedSteps.length}: "${instruction.substring(0, 50)}..."`);
+            console.log(`  Distance: ${distance}, Duration: ${duration}min`);
             
-            // For Valhalla, the instruction is usually well-formatted already
-            // Let's avoid over-processing it
+            // For Valhalla, extract street names from maneuver.street_names
             let displayInstruction = instruction;
             
-            // Only try to extract street name for non-Valhalla APIs
-            if (apiType !== 'valhalla') {
-                // Extract street name from instruction if available
+            if (apiType === 'valhalla' && step.maneuver?.street_names && step.maneuver.street_names.length > 0) {
+                // Valhalla provides street_names array (now step.maneuver contains the full step)
+                const streetName = step.maneuver.street_names[0];
+                if (streetName && streetName.trim().length > 0) {
+                    // Check if instruction already contains the street name
+                    if (!instruction.includes(streetName)) {
+                        displayInstruction = `${streetName} - ${instruction}`;
+                    }
+                }
+            } else if (apiType !== 'valhalla') {
+                // For other APIs, use the original street name extraction
                 const streetName = this.extractStreetName(instruction);
                 
                 if (streetName && streetName.trim().length > 0) {
@@ -2426,10 +2716,10 @@ class BikeRoutePlanner {
                     displayInstruction = `${routeTypeDescription} - ${instruction}`;
                 }
             }
-            // For Valhalla, just use the instruction as-is (it's already well-formatted)
             
             const stepDiv = document.createElement('div');
             stepDiv.className = 'turn-step';
+            
             stepDiv.innerHTML = `
                 <div class="turn-step-header">
                     <span class="turn-step-number">${index + 1}</span>
@@ -2441,9 +2731,155 @@ class BikeRoutePlanner {
                 </div>
             `;
             
+            console.log(`🔍 Step ${index + 1} HTML created and appended`);
             directionsDiv.appendChild(stepDiv);
         });
+        
+        console.log(`🔍 Total steps processed: ${processedSteps.length}`);
+        console.log(`🔍 Total children in directionsDiv: ${directionsDiv.children.length}`);
     }
+    calculateGradientStatistics(elevationData, routePoints) {
+        try {
+            const gradients = [];
+            
+            // Calculate gradient between consecutive elevation points
+            for (let i = 0; i < elevationData.length - 1; i++) {
+                const currentPoint = elevationData[i];
+                const nextPoint = elevationData[i + 1];
+                
+                if (currentPoint && nextPoint && routePoints && routePoints[i] && routePoints[i + 1]) {
+                    const elevationChange = nextPoint.elevation - currentPoint.elevation;
+                    
+                    // Calculate horizontal distance using Haversine formula (in meters)
+                    const lat1 = routePoints[i].lat * Math.PI / 180;
+                    const lat2 = routePoints[i + 1].lat * Math.PI / 180;
+                    const lon1 = routePoints[i].lng * Math.PI / 180;
+                    const lon2 = routePoints[i + 1].lng * Math.PI / 180;
+                    
+                    const dLat = lat2 - lat1;
+                    const dLon = lon2 - lon1;
+                    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+                    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+                    const distance = 6371000 * c; // Earth's radius in meters
+                    
+                    // Only calculate gradient if we have meaningful distance (> 1 meter)
+                    if (distance > 1) {
+                        const gradient = (elevationChange / distance) * 100;
+                        
+                        // Filter out unrealistic gradients (> 30% or < -30%)
+                        if (Math.abs(gradient) <= 30) {
+                            gradients.push(gradient);
+                        } else {
+                            console.log(`🏔️ Filtering unrealistic gradient: ${gradient}% (distance: ${distance}m, elevation change: ${elevationChange}m)`);
+                        }
+                    }
+                }
+            }
+            
+            console.log(`🏔️ Valid gradients calculated: ${gradients.length} from ${elevationData.length - 1} segments`);
+            
+            if (gradients.length === 0) {
+                console.log(`🏔️ No valid gradients found, returning zeros`);
+                return { medianGrade: 0, maxGrade: 0, minGrade: 0 };
+            }
+            
+            // Sort gradients for median calculation
+            gradients.sort((a, b) => a - b);
+            
+            // Calculate median properly
+            let medianGrade;
+            if (gradients.length % 2 === 0) {
+                // Even number of gradients - take average of middle two
+                const mid1 = gradients[gradients.length / 2 - 1];
+                const mid2 = gradients[gradients.length / 2];
+                medianGrade = (mid1 + mid2) / 2;
+            } else {
+                // Odd number of gradients - take middle value
+                medianGrade = gradients[Math.floor(gradients.length / 2)];
+            }
+            
+            const maxGrade = Math.max(...gradients);
+            const minGrade = Math.min(...gradients);
+            
+            console.log(`🏔️ Gradient statistics debug:`);
+            console.log(`  - Total gradients: ${gradients.length}`);
+            console.log(`  - Sample gradients: ${gradients.slice(0, 5).join(', ')}...`);
+            console.log(`  - Sorted range: ${minGrade}% to ${maxGrade}%`);
+            console.log(`  - Median calculation: ${gradients.length % 2 === 0 ? 'average of middle two' : 'middle value'}`);
+            console.log(`  - Final median: ${medianGrade}%`);
+            
+            return {
+                medianGrade: Math.round(medianGrade * 10) / 10, // Round to 1 decimal
+                maxGrade: Math.round(maxGrade * 10) / 10,
+                minGrade: Math.round(minGrade * 10) / 10
+            };
+        } catch (error) {
+            console.error('Error calculating gradient statistics:', error);
+            return { medianGrade: 0, maxGrade: 0, minGrade: 0 };
+        }
+    }
+    
+    calculateStepGradient(step, routePoints) {
+        // Calculate gradient for a single maneuver
+        try {
+            const startIndex = step.maneuver.begin_shape_index;
+            const endIndex = step.maneuver.end_shape_index;
+            
+            if (startIndex === undefined || endIndex === undefined || !routePoints || startIndex >= endIndex) {
+                return 0; // Flat or invalid
+            }
+            
+            let totalElevationChange = 0;
+            let totalHorizontalDistance = 0;
+            
+            // Calculate elevation change and horizontal distance for this maneuver
+            for (let i = startIndex; i < endIndex; i++) {
+                const currentPoint = routePoints[i];
+                const nextPoint = routePoints[i + 1];
+                
+                if (currentPoint && nextPoint) {
+                    // Elevation change
+                    totalElevationChange += (nextPoint.lat - currentPoint.lat) * 111320; // meters per degree latitude
+                    
+                    // Horizontal distance (Haversine formula simplified)
+                    const lat1 = currentPoint.lat * Math.PI / 180;
+                    const lat2 = nextPoint.lat * Math.PI / 180;
+                    const lon1 = currentPoint.lng * Math.PI / 180;
+                    const lon2 = nextPoint.lng * Math.PI / 180;
+                    
+                    const dLat = lat2 - lat1;
+                    const dLon = lon2 - lon1;
+                    const a = Math.sin(dLat / 2) * Math.sin(dLon / 2);
+                    const c = Math.sqrt(1 - a * a);
+                    const r = 6371000; // Earth's radius in meters
+                    
+                    const distance = r * c * 2;
+                    totalHorizontalDistance += distance;
+                }
+            }
+            
+            // Calculate gradient as percentage
+            const gradient = totalHorizontalDistance > 0 ? (totalElevationChange / totalHorizontalDistance) * 100 : 0;
+            
+            return Math.round(gradient * 10) / 10; // Round to 1 decimal place
+        } catch (error) {
+            console.error('Error calculating gradient:', error);
+            return 0;
+        }
+    }
+    
+    getDifficultyRating(gradient) {
+        // Rate difficulty based on gradient percentage
+        if (gradient < 0) return 'uphill'; // Negative gradient = uphill
+        if (gradient === 0) return 'flat';
+        
+        if (gradient <= 2) return 'easy';
+        if (gradient <= 4) return 'moderate';
+        if (gradient <= 6) return 'hard';
+        if (gradient <= 8) return 'very-hard';
+        return 'extreme';
+    }
+    
     extractStreetName(instruction) {
         // Try to extract street name from instruction
         // OSRM instruction patterns to handle:
