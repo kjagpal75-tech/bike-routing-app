@@ -2334,7 +2334,38 @@ class BikeRoutePlanner {
             }
         }
         
-        return gradients;
+        // Smooth gradients to eliminate noise
+        const smoothedGradients = this.smoothGradients(gradients);
+        
+        console.log(`🏔️ Original gradients: ${gradients.length}, Smoothed gradients: ${smoothedGradients.length}`);
+        console.log(`🏔️ Sample original: ${gradients.slice(0, 10).map(g => g.toFixed(1)).join(', ')}`);
+        console.log(`🏔️ Sample smoothed: ${smoothedGradients.slice(0, 10).map(g => g.toFixed(1)).join(', ')}`);
+        
+        return smoothedGradients;
+    }
+    
+    smoothGradients(gradients) {
+        if (gradients.length < 5) return gradients;
+        
+        const smoothed = [];
+        const windowSize = 5; // 5-point moving average
+        
+        for (let i = 0; i < gradients.length; i++) {
+            let sum = 0;
+            let count = 0;
+            
+            // Calculate moving average
+            for (let j = Math.max(0, i - Math.floor(windowSize / 2)); 
+                 j <= Math.min(gradients.length - 1, i + Math.floor(windowSize / 2)); 
+                 j++) {
+                sum += gradients[j];
+                count++;
+            }
+            
+            smoothed.push(sum / count);
+        }
+        
+        return smoothed;
     }
     
     drawElevationAndGradientChart(elevations, gradients, distances) {
@@ -2401,57 +2432,120 @@ class BikeRoutePlanner {
         
         ctx.stroke();
         
-        // Draw gradient overlay with color coding (enhanced full coverage)
-        gradients.forEach((gradient, i) => {
-            const x1 = padding + (i / (gradients.length - 1)) * chartWidth;
-            const x2 = padding + ((i + 1) / (gradients.length - 1)) * chartWidth;
+        // Draw gradient overlay with continuous distance-based shading
+        // Group consecutive gradients by category
+        const gradientSegments = [];
+        let currentCategory = null;
+        let segmentStart = 0;
+        
+        for (let i = 0; i < gradients.length; i++) {
+            const absGradient = Math.abs(gradients[i]);
+            let category;
             
-            // Color based on gradient difficulty (cyclist-friendly categories)
-            let color;
-            const absGradient = Math.abs(gradient);
             if (absGradient <= 3) {
-                color = 'rgba(76, 175, 80, 0.4)'; // Green - False Flat (0-3%) - Increased opacity
+                category = 'false-flat';
             } else if (absGradient <= 6) {
-                color = 'rgba(255, 152, 0, 0.4)'; // Orange - Moderate (4-6%) - Increased opacity
+                category = 'moderate';
             } else if (absGradient <= 9) {
-                color = 'rgba(255, 87, 34, 0.4)'; // Red - Hard (7-9%) - Increased opacity
+                category = 'hard';
             } else if (absGradient <= 15) {
-                color = 'rgba(156, 39, 176, 0.4)'; // Purple - Severe (10-15%) - Increased opacity
+                category = 'severe';
             } else {
-                color = 'rgba(121, 85, 72, 0.4)'; // Brown - Extreme (>15%) - Increased opacity
+                category = 'extreme';
             }
             
-            // Draw full-height gradient rectangle with enhanced coverage
+            // Start new segment when category changes
+            if (currentCategory !== category) {
+                // Save previous segment if it exists
+                if (currentCategory !== null) {
+                    gradientSegments.push({
+                        category: currentCategory,
+                        startIndex: segmentStart,
+                        endIndex: i - 1
+                    });
+                }
+                currentCategory = category;
+                segmentStart = i;
+            }
+        }
+        
+        // Add final segment
+        if (currentCategory !== null) {
+            gradientSegments.push({
+                category: currentCategory,
+                startIndex: segmentStart,
+                endIndex: gradients.length - 1
+            });
+        }
+        
+        console.log(`🏔️ Gradient segments: ${gradientSegments.length} continuous sections`);
+        gradientSegments.forEach((segment, index) => {
+            const segmentDistance = ((segment.endIndex - segment.startIndex + 1) / gradients.length) * (distances[distances.length - 1] || 1000);
+            const distanceText = useImperialUnits ? 
+                (segmentDistance * 0.621371 / 1000).toFixed(2) + ' mi' : 
+                (segmentDistance / 1000).toFixed(2) + ' km';
+            console.log(`🏔️ Segment ${index + 1}: ${segment.category} - ${distanceText} (indices ${segment.startIndex}-${segment.endIndex})`);
+        });
+        
+        // Debug: Show gradient distribution
+        const categoryCount = {
+            'false-flat': 0,
+            'moderate': 0,
+            'hard': 0,
+            'severe': 0,
+            'extreme': 0
+        };
+        
+        gradients.forEach(gradient => {
+            const absGradient = Math.abs(gradient);
+            if (absGradient <= 3) categoryCount['false-flat']++;
+            else if (absGradient <= 6) categoryCount['moderate']++;
+            else if (absGradient <= 9) categoryCount['hard']++;
+            else if (absGradient <= 15) categoryCount['severe']++;
+            else categoryCount['extreme']++;
+        });
+        
+        console.log(`🏔️ Gradient distribution:`, categoryCount);
+        console.log(`🏔️ Total gradients: ${gradients.length}`);
+        console.log(`🏔️ Percentage false-flat: ${((categoryCount['false-flat'] / gradients.length) * 100).toFixed(1)}%`);
+        
+        // Draw continuous gradient segments with FULL coverage
+        gradientSegments.forEach((segment, index) => {
+            const x1 = padding + (segment.startIndex / (gradients.length - 1)) * chartWidth;
+            const x2 = padding + ((segment.endIndex + 1) / (gradients.length - 1)) * chartWidth; // +1 to include end point
+            
+            // Color based on gradient category
+            let color;
+            switch (segment.category) {
+                case 'false-flat':
+                    color = 'rgba(76, 175, 80, 0.4)'; // Green - False Flat (0-3%)
+                    break;
+                case 'moderate':
+                    color = 'rgba(255, 152, 0, 0.4)'; // Orange - Moderate (4-6%)
+                    break;
+                case 'hard':
+                    color = 'rgba(255, 87, 34, 0.4)'; // Red - Hard (7-9%)
+                    break;
+                case 'severe':
+                    color = 'rgba(156, 39, 176, 0.4)'; // Purple - Severe (10-15%)
+                    break;
+                case 'extreme':
+                    color = 'rgba(121, 85, 72, 0.4)'; // Brown - Extreme (>15%)
+                    break;
+            }
+            
+            // Draw full-height continuous gradient rectangle
             ctx.fillStyle = color;
             ctx.fillRect(x1, padding, x2 - x1, chartHeight);
             
-            // Add subtle border between gradient changes for better definition
-            if (i > 0) {
-                const prevGradient = gradients[i - 1];
-                const prevAbsGradient = Math.abs(prevGradient);
-                let prevColor;
-                
-                if (prevAbsGradient <= 3) {
-                    prevColor = 'rgba(76, 175, 80, 0.6)';
-                } else if (prevAbsGradient <= 6) {
-                    prevColor = 'rgba(255, 152, 0, 0.6)';
-                } else if (prevAbsGradient <= 9) {
-                    prevColor = 'rgba(255, 87, 34, 0.6)';
-                } else if (prevAbsGradient <= 15) {
-                    prevColor = 'rgba(156, 39, 176, 0.6)';
-                } else {
-                    prevColor = 'rgba(121, 85, 72, 0.6)';
-                }
-                
-                // Draw transition line if gradient category changes
-                if (Math.floor(absGradient / 3) !== Math.floor(prevAbsGradient / 3)) {
-                    ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
-                    ctx.lineWidth = 1;
-                    ctx.beginPath();
-                    ctx.moveTo(x1, padding);
-                    ctx.lineTo(x1, height - padding);
-                    ctx.stroke();
-                }
+            // Add subtle border between gradient categories (only between different categories)
+            if (index > 0) {
+                ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(x1, padding);
+                ctx.lineTo(x1, height - padding);
+                ctx.stroke();
             }
         });
         
