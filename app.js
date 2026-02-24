@@ -2039,6 +2039,16 @@ class BikeRoutePlanner {
         console.log('🗺️ Bounds constructor:', bounds.constructor.name);
         console.log('🗺️ Bounds center:', bounds.getCenter());
         
+        // Primary fitBounds call - center the map on the route
+        try {
+            this.map.fitBounds(bounds, { padding: [50, 50] });
+            console.log('🗺️ Map bounds fitted successfully (primary)');
+            window.updateDebugPanel('MAP_RENDER', 'SUCCESS_PRIMARY');
+        } catch (error) {
+            console.error('🗺️ Error fitting primary bounds:', error);
+            window.updateDebugPanel('MAP_ERROR', 'BOUNDS_ERROR_PRIMARY');
+        }
+        
         // Check if bounds has getSize method
         if (typeof bounds.getSize === 'function') {
             console.log('🗺️ Bounds size:', bounds.getSize());
@@ -2318,6 +2328,20 @@ class BikeRoutePlanner {
         // Create elevation and gradient chart using canvas
         setTimeout(() => {
             this.drawElevationAndGradientChart(elevations, gradients, distances);
+            
+            // Re-center map after elevation profile is rendered
+            setTimeout(() => {
+                if (this.routeLayer && this.routeLayer.getBounds) {
+                    try {
+                        const routeBounds = this.routeLayer.getBounds();
+                        this.map.invalidateSize(); // Force map recalculation
+                        this.map.fitBounds(routeBounds, { padding: [80, 50] });
+                        console.log('🗺️ Map re-centered after elevation profile');
+                    } catch (error) {
+                        console.error('🗺️ Error re-centering map:', error);
+                    }
+                }
+            }, 200);
         }, 100);
     }
     
