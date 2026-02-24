@@ -40,7 +40,7 @@ window.updateDebugPanel = (key, value) => {
 
 // Wait for DOM to be ready before initializing
 document.addEventListener('DOMContentLoaded', () => {
-    new BikeRoutePlanner();
+    window.app = new BikeRoutePlanner();
 });
 
 class BikeRoutePlanner {
@@ -815,7 +815,7 @@ class BikeRoutePlanner {
     }
     
     handleMapClick(e) {
-        // Set start point first, then end point, then waypoints
+        // Set start point first, then end point - NO WAYPOINT CREATION FROM MAP CLICKS
         if (!this.startMarker) {
             this.setStartPoint(e.latlng);
         } else if (!this.endMarker) {
@@ -827,7 +827,9 @@ class BikeRoutePlanner {
             }
             this.setEndPoint(e.latlng);
         } else {
-            this.addWaypointAtLocation(e.latlng);
+            // WAYPOINT CREATION DISABLED - Use the "+" button instead
+            console.log('🚫 Waypoint creation from map clicks is disabled. Use the "+" button to add waypoints.');
+            return;
         }
     }
     
