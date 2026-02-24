@@ -2265,7 +2265,7 @@ class BikeRoutePlanner {
         return loss;
     }
     
-    createElevationChart(distances, elevations, gain, loss, peak, min) {
+    createElevationChart(cumulativeDistances, elevations, gain, loss, peak, min) {
         const elevationDiv = document.getElementById('elevationProfile');
         if (!elevationDiv) return;
         
@@ -2278,7 +2278,7 @@ class BikeRoutePlanner {
         const minText = this.convertElevation(min);
         
         // Calculate gradient data for the chart
-        const gradients = this.calculateGradientsForChart(elevations, distances);
+        const gradients = this.calculateGradientsForChart(elevations, cumulativeDistances);
         
         elevationDiv.innerHTML = `
             <h3>🏔️ Elevation Profile</h3>
@@ -2327,7 +2327,7 @@ class BikeRoutePlanner {
         
         // Create elevation and gradient chart using canvas
         setTimeout(() => {
-            this.drawElevationAndGradientChart(elevations, gradients, distances);
+            this.drawElevationAndGradientChart(elevations, gradients, cumulativeDistances);
             
             // Re-center map after elevation profile is rendered
             setTimeout(() => {
@@ -2345,12 +2345,12 @@ class BikeRoutePlanner {
         }, 100);
     }
     
-    calculateGradientsForChart(elevations, distances) {
+    calculateGradientsForChart(elevations, cumulativeDistances) {
         const gradients = [];
         
         for (let i = 0; i < elevations.length - 1; i++) {
             const elevationChange = elevations[i + 1] - elevations[i];
-            const distanceChange = distances[i + 1] - distances[i];
+            const distanceChange = cumulativeDistances[i + 1] - cumulativeDistances[i];
             
             if (distanceChange > 0) {
                 const gradient = (elevationChange / distanceChange) * 100;
@@ -2394,7 +2394,7 @@ class BikeRoutePlanner {
         return smoothed;
     }
     
-    drawElevationAndGradientChart(elevations, gradients, distances) {
+    drawElevationAndGradientChart(elevations, gradients, cumulativeDistances) {
         const canvas = document.getElementById('elevationChart');
         if (!canvas) return;
         
@@ -2506,7 +2506,7 @@ class BikeRoutePlanner {
         
         console.log(`🏔️ Gradient segments: ${gradientSegments.length} continuous sections`);
         gradientSegments.forEach((segment, index) => {
-            const segmentDistance = ((segment.endIndex - segment.startIndex + 1) / gradients.length) * (distances[distances.length - 1] || 1000);
+            const segmentDistance = ((segment.endIndex - segment.startIndex + 1) / gradients.length) * (cumulativeDistances[cumulativeDistances.length - 1] || 1000);
             const distanceText = useImperialUnits ? 
                 (segmentDistance * 0.621371 / 1000).toFixed(2) + ' mi' : 
                 (segmentDistance / 1000).toFixed(2) + ' km';
@@ -2592,7 +2592,7 @@ class BikeRoutePlanner {
         
         // X-axis labels (distance)
         ctx.textAlign = 'center';
-        const totalDistance = distances[distances.length - 1] || 1000; // fallback to 1km
+        const totalDistance = cumulativeDistances[cumulativeDistances.length - 1] || 1000; // fallback to 1km
         const distanceStep = Math.ceil(totalDistance / 5 / 1000) * 1000; // Round to nearest km
         const numSteps = Math.ceil(totalDistance / distanceStep);
         
@@ -2632,7 +2632,7 @@ class BikeRoutePlanner {
         this.chartData = {
             elevations,
             gradients,
-            distances,
+            cumulativeDistances,
             padding,
             chartWidth,
             chartHeight,
@@ -2649,7 +2649,7 @@ class BikeRoutePlanner {
         this.chartData = {
             elevations,
             gradients,
-            distances,
+            cumulativeDistances,
             padding,
             chartWidth,
             chartHeight,
@@ -2692,7 +2692,7 @@ class BikeRoutePlanner {
         const x = event.clientX - rect.left;
         const y = event.clientY - rect.top;
         
-        const { padding, chartWidth, chartHeight, elevations, distances, minElevation, maxElevation } = this.chartData;
+        const { padding, chartWidth, chartHeight, elevations, cumulativeDistances, minElevation, maxElevation } = this.chartData;
         
         // Find closest point on the chart
         const chartX = Math.max(padding, Math.min(x, padding + chartWidth));
@@ -2701,7 +2701,7 @@ class BikeRoutePlanner {
         
         if (pointIndex >= 0 && pointIndex < elevations.length) {
             const elevation = elevations[pointIndex];
-            const distance = distances[pointIndex];
+            const distance = cumulativeDistances[pointIndex];
             const gradient = this.chartData.gradients[pointIndex];
             
             // Display hover info
