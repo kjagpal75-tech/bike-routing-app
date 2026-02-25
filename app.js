@@ -1471,7 +1471,7 @@ class BikeRoutePlanner {
                         units: 'kilometers'
                     };
                     
-                    apiUrl = `https://valhalla1.openstreetmap.de/route?json=${encodeURIComponent(JSON.stringify(valhallaData))}`;
+                    apiUrl = `/valhalla/route?json=${encodeURIComponent(JSON.stringify(valhallaData))}`;
                     
                     console.log(`🛣️ Valhalla direct API URL: ${apiUrl}`);
                     console.log(`🛣️ Using profile: ${valhallaProfile}`);
@@ -2162,6 +2162,7 @@ class BikeRoutePlanner {
             if (elevationData.results && elevationData.results.length > 0) {
                 // Calculate elevation statistics
                 const elevations = elevationData.results.map(result => result.elevation);
+                console.log('🏔️ DEBUG: Elevations array - first=' + elevations[0] + ', last=' + elevations[elevations.length-1] + ', max=' + Math.max(...elevations) + ', length=' + elevations.length);
                 const elevationGain = this.calculateElevationGain(elevations);
                 const elevationLoss = this.calculateElevationLoss(elevations);
                 const peakElevation = Math.max(...elevations);
@@ -2312,7 +2313,7 @@ class BikeRoutePlanner {
                 </div>
             </div>
             <div class="elevation-chart-container">
-                <canvas id="elevationChart" width="800" height="300"></canvas>
+                <canvas id="elevationChart" width="800" height="450"></canvas>
             </div>
             <div class="gradient-legend">
                 <span class="legend-title">Gradient:</span>
@@ -2401,9 +2402,6 @@ class BikeRoutePlanner {
         const width = canvas.width;
         const height = canvas.height;
         
-        // Check user's unit preference
-        const useImperialUnits = document.getElementById('useImperialUnits')?.checked || false;
-        
         // Clear canvas
         ctx.clearRect(0, 0, width, height);
         
@@ -2417,7 +2415,10 @@ class BikeRoutePlanner {
         const maxElevation = Math.max(...elevations);
         const elevationRange = maxElevation - minElevation;
         
-        // Draw grid lines
+        console.log('🏔️ ELEVATION CHART: min=' + minElevation + 'm, max=' + maxElevation + 'm, range=' + elevationRange + 'm');
+        console.log('🏔️ ELEVATION CHART: Peak elevation=' + maxElevation + 'm (' + (maxElevation * 3.28084).toFixed(0) + 'ft)');
+        
+        // Draw simple grid
         ctx.strokeStyle = '#e0e0e0';
         ctx.lineWidth = 1;
         
@@ -2439,14 +2440,20 @@ class BikeRoutePlanner {
             ctx.stroke();
         }
         
-        // Draw elevation profile
-        ctx.strokeStyle = '#4CAF50';
-        ctx.lineWidth = 3;
+        // Draw elevation profile - SIMPLE AND CLEAR
+        ctx.strokeStyle = '#FF0000'; // Bright red for visibility
+        ctx.lineWidth = 4; // Thicker line
         ctx.beginPath();
         
         elevations.forEach((elevation, i) => {
+            // Simple coordinate calculation
             const x = padding + (i / (elevations.length - 1)) * chartWidth;
             const y = padding + chartHeight - ((elevation - minElevation) / elevationRange) * chartHeight;
+            
+            // Debug peak points
+            if (elevation === maxElevation) {
+                console.log('🏔️ DRAWING PEAK: elevation=' + elevation + 'm at x=' + x.toFixed(1) + ', y=' + y.toFixed(1));
+            }
             
             if (i === 0) {
                 ctx.moveTo(x, y);
@@ -2457,122 +2464,18 @@ class BikeRoutePlanner {
         
         ctx.stroke();
         
-        // Draw gradient overlay with continuous distance-based shading
-        // Group consecutive gradients by category
-        const gradientSegments = [];
-        let currentCategory = null;
-        let segmentStart = 0;
-        
-        for (let i = 0; i < gradients.length; i++) {
-            const absGradient = Math.abs(gradients[i]);
-            let category;
+        // Draw peak marker
+        const peakIndex = elevations.indexOf(maxElevation);
+        if (peakIndex !== -1) {
+            const peakX = padding + (peakIndex / (elevations.length - 1)) * chartWidth;
+            const peakY = padding + chartHeight - ((maxElevation - minElevation) / elevationRange) * chartHeight; // Same Y as peak line
+            console.log('🏔️ PEAK MARKER: Drawing at x=' + peakX.toFixed(1) + ', y=' + peakY.toFixed(1));
             
-            if (absGradient <= 3) {
-                category = 'false-flat';
-            } else if (absGradient <= 6) {
-                category = 'moderate';
-            } else if (absGradient <= 9) {
-                category = 'hard';
-            } else if (absGradient <= 15) {
-                category = 'severe';
-            } else {
-                category = 'extreme';
-            }
-            
-            // Start new segment when category changes
-            if (currentCategory !== category) {
-                // Save previous segment if it exists
-                if (currentCategory !== null) {
-                    gradientSegments.push({
-                        category: currentCategory,
-                        startIndex: segmentStart,
-                        endIndex: i - 1
-                    });
-                }
-                currentCategory = category;
-                segmentStart = i;
-            }
+            ctx.fillStyle = '#FF0000';
+            ctx.beginPath();
+            ctx.arc(peakX, peakY, 6, 0, 2 * Math.PI, false);
+            ctx.fill();
         }
-        
-        // Add final segment
-        if (currentCategory !== null) {
-            gradientSegments.push({
-                category: currentCategory,
-                startIndex: segmentStart,
-                endIndex: gradients.length - 1
-            });
-        }
-        
-        console.log(`🏔️ Gradient segments: ${gradientSegments.length} continuous sections`);
-        gradientSegments.forEach((segment, index) => {
-            const segmentDistance = ((segment.endIndex - segment.startIndex + 1) / gradients.length) * (cumulativeDistances[cumulativeDistances.length - 1] || 1000);
-            const distanceText = useImperialUnits ? 
-                (segmentDistance * 0.621371 / 1000).toFixed(2) + ' mi' : 
-                (segmentDistance / 1000).toFixed(2) + ' km';
-            console.log(`🏔️ Segment ${index + 1}: ${segment.category} - ${distanceText} (indices ${segment.startIndex}-${segment.endIndex})`);
-        });
-        
-        // Debug: Show gradient distribution
-        const categoryCount = {
-            'false-flat': 0,
-            'moderate': 0,
-            'hard': 0,
-            'severe': 0,
-            'extreme': 0
-        };
-        
-        gradients.forEach(gradient => {
-            const absGradient = Math.abs(gradient);
-            if (absGradient <= 3) categoryCount['false-flat']++;
-            else if (absGradient <= 6) categoryCount['moderate']++;
-            else if (absGradient <= 9) categoryCount['hard']++;
-            else if (absGradient <= 15) categoryCount['severe']++;
-            else categoryCount['extreme']++;
-        });
-        
-        console.log(`🏔️ Gradient distribution:`, categoryCount);
-        console.log(`🏔️ Total gradients: ${gradients.length}`);
-        console.log(`🏔️ Percentage false-flat: ${((categoryCount['false-flat'] / gradients.length) * 100).toFixed(1)}%`);
-        
-        // Draw continuous gradient segments with FULL coverage
-        gradientSegments.forEach((segment, index) => {
-            const x1 = padding + (segment.startIndex / (gradients.length - 1)) * chartWidth;
-            const x2 = padding + ((segment.endIndex + 1) / (gradients.length - 1)) * chartWidth; // +1 to include end point
-            
-            // Color based on gradient category
-            let color;
-            switch (segment.category) {
-                case 'false-flat':
-                    color = 'rgba(76, 175, 80, 0.4)'; // Green - False Flat (0-3%)
-                    break;
-                case 'moderate':
-                    color = 'rgba(255, 152, 0, 0.4)'; // Orange - Moderate (4-6%)
-                    break;
-                case 'hard':
-                    color = 'rgba(255, 87, 34, 0.4)'; // Red - Hard (7-9%)
-                    break;
-                case 'severe':
-                    color = 'rgba(156, 39, 176, 0.4)'; // Purple - Severe (10-15%)
-                    break;
-                case 'extreme':
-                    color = 'rgba(121, 85, 72, 0.4)'; // Brown - Extreme (>15%)
-                    break;
-            }
-            
-            // Draw full-height continuous gradient rectangle
-            ctx.fillStyle = color;
-            ctx.fillRect(x1, padding, x2 - x1, chartHeight);
-            
-            // Add subtle border between gradient categories (only between different categories)
-            if (index > 0) {
-                ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
-                ctx.lineWidth = 1;
-                ctx.beginPath();
-                ctx.moveTo(x1, padding);
-                ctx.lineTo(x1, height - padding);
-                ctx.stroke();
-            }
-        });
         
         // Draw axes labels
         ctx.fillStyle = '#333';
@@ -2675,6 +2578,7 @@ class BikeRoutePlanner {
         const y = event.clientY - rect.top;
         
         const { padding, chartWidth, chartHeight, elevations, cumulativeDistances, minElevation, maxElevation } = this.chartData;
+        const elevationRange = maxElevation - minElevation;
         
         // Find closest point on chart
         const chartX = Math.max(padding, Math.min(x, padding + chartWidth));
@@ -2691,11 +2595,15 @@ class BikeRoutePlanner {
             const distance = cumulativeDistances[pointIndex];
             const gradient = this.chartData.gradients[pointIndex];
             
-            // DEBUG: Added back to troubleshoot hover issues
-            console.log("🖱️ HOVER DEBUG: pointIndex=" + pointIndex + ", elevation=" + elevation + "");
+            // DEBUG: Minimal logging for hover functionality
+            console.log("🖱️ HOVER: pointIndex=" + pointIndex + ", elevation=" + elevation + ", isPeak=" + (elevation === maxElevation));
             
-            // Display hover info at mouse position
-            this.showChartHoverInfo(event.clientX, event.clientY, elevation, distance, gradient);
+            // Calculate actual chart position for tooltip
+            const tooltipX = padding + (pointIndex / (elevations.length - 1)) * chartWidth;
+            const tooltipY = padding + ((maxElevation - elevation) / elevationRange) * chartHeight;
+            
+            // Display hover info at actual chart position
+            this.showChartHoverInfo(tooltipX, tooltipY, elevation, distance, gradient);
         } else {
             // Hide hover if outside chart bounds
             this.clearChartHover();
