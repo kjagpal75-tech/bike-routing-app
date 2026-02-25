@@ -17,7 +17,40 @@ ssl._create_default_https_context = ssl._create_unverified_context
 
 class ProxyHandler(BaseHTTPRequestHandler):
     def do_GET(self):
-        if self.path.startswith('/valhalla/'):
+        if self.path.startswith('/usgs-elevation'):
+            # Handle USGS Elevation API requests
+            import urllib.request
+            import json
+            
+            # Extract locations from the path
+            query = self.path.split('?')[-1] if '?' in self.path else ''
+            params = urllib.parse.parse_qs(query)
+            locations = params.get('locations', [''])[0]
+            
+            if locations:
+                try:
+                    # Forward to USGS API
+                    usgs_url = f"https://apps.nationalmap.gov/elevation/api/data?locations={locations}"
+                    
+                    with urllib.request.urlopen(usgs_url) as response:
+                        data = response.read().decode('utf-8')
+                        
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'application/json')
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+                    self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+                    self.end_headers()
+                    self.wfile.write(data.encode())
+                    return
+                except Exception as e:
+                    self.send_error(500, f"USGS API error: {str(e)}")
+                    return
+            else:
+                self.send_error(400, "Missing locations parameter")
+                return
+                
+        elif self.path.startswith('/valhalla/'):
             # Extract the actual Valhalla URL and JSON data
             path_parts = self.path.split('?', 1)
             valhalla_path = path_parts[0].replace('/valhalla/', '')
@@ -181,6 +214,7 @@ if __name__ == '__main__':
     server = HTTPServer(('localhost', port), ProxyHandler)
     print(f"🚀 Proxy server running on http://localhost:{port}")
     print("🛣️ Valhalla API proxied at /valhalla/")
-    print("🌐 App available at http://localhost:{port}")
+    print("�️ USGS Elevation API proxied at /usgs-elevation")
+    print("�🌐 App available at http://localhost:{port}")
     print(f"📁 Serving files from: {os.path.dirname(os.path.abspath(__file__))}")
     server.serve_forever()

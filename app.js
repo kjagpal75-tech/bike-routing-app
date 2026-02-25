@@ -892,7 +892,6 @@ class BikeRoutePlanner {
             });
             
             const latlng = L.latLng(position.coords.latitude, position.coords.longitude);
-            this.map.setView(latlng, 15);
             this.setEndPoint(latlng);
             
             // Update input with location info
@@ -2627,24 +2626,7 @@ class BikeRoutePlanner {
         ctx.font = '14px Arial';
         ctx.textAlign = 'center';
         ctx.fillText('Elevation Profile with Gradient Overlay', width / 2, 20);
-                
-        // Store chart data for hover interaction
-        this.chartData = {
-            elevations,
-            gradients,
-            cumulativeDistances,
-            padding,
-            chartWidth,
-            chartHeight,
-            minElevation,
-            maxElevation,
-            width,
-            height
-        };
         
-        // Add hover event listener to canvas
-        canvas.addEventListener('mousemove', (e) => this.handleChartHover(e));
-        canvas.addEventListener('mouseleave', () => this.clearChartHover());
         // Store chart data for hover interaction
         this.chartData = {
             elevations,
@@ -2683,7 +2665,7 @@ class BikeRoutePlanner {
         }
         return loss;
     }
-        
+    
     handleChartHover(event) {
         const canvas = document.getElementById('elevationChart');
         if (!canvas || !this.chartData) return;
@@ -2694,18 +2676,29 @@ class BikeRoutePlanner {
         
         const { padding, chartWidth, chartHeight, elevations, cumulativeDistances, minElevation, maxElevation } = this.chartData;
         
-        // Find closest point on the chart
+        // Find closest point on chart
         const chartX = Math.max(padding, Math.min(x, padding + chartWidth));
         const relativeX = (chartX - padding) / chartWidth;
         const pointIndex = Math.floor(relativeX * (elevations.length - 1));
         
-        if (pointIndex >= 0 && pointIndex < elevations.length) {
+        // Check if mouse is within chart bounds (Y-axis)
+        const chartY = Math.max(padding, Math.min(y, padding + chartHeight));
+        const relativeY = (chartY - padding) / chartHeight;
+        
+        // Only show hover if within chart area
+        if (pointIndex >= 0 && pointIndex < elevations.length && relativeY >= 0 && relativeY <= 1) {
             const elevation = elevations[pointIndex];
             const distance = cumulativeDistances[pointIndex];
             const gradient = this.chartData.gradients[pointIndex];
             
-            // Display hover info
+            // DEBUG: Added back to troubleshoot hover issues
+            console.log("🖱️ HOVER DEBUG: pointIndex=" + pointIndex + ", elevation=" + elevation + "");
+            
+            // Display hover info at mouse position
             this.showChartHoverInfo(event.clientX, event.clientY, elevation, distance, gradient);
+        } else {
+            // Hide hover if outside chart bounds
+            this.clearChartHover();
         }
     }
     
