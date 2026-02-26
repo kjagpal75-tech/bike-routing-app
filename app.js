@@ -2529,24 +2529,6 @@ class BikeRoutePlanner {
         ctx.font = '14px Arial';
         ctx.textAlign = 'center';
         ctx.fillText('Elevation Profile with Gradient Overlay', width / 2, 20);
-        
-        // Store chart data for hover interaction
-        this.chartData = {
-            elevations,
-            gradients,
-            cumulativeDistances,
-            padding,
-            chartWidth,
-            chartHeight,
-            minElevation,
-            maxElevation,
-            width,
-            height
-        };
-        
-        // Add hover event listener to canvas
-        canvas.addEventListener('mousemove', (e) => this.handleChartHover(e));
-        canvas.addEventListener('mouseleave', () => this.clearChartHover());
     }
     
     calculateElevationGain(elevations) {
@@ -2569,96 +2551,7 @@ class BikeRoutePlanner {
         return loss;
     }
     
-    handleChartHover(event) {
-        const canvas = document.getElementById('elevationChart');
-        if (!canvas || !this.chartData) return;
-        
-        const rect = canvas.getBoundingClientRect();
-        const x = event.clientX - rect.left;
-        const y = event.clientY - rect.top;
-        
-        const { padding, chartWidth, chartHeight, elevations, cumulativeDistances, minElevation, maxElevation } = this.chartData;
-        const elevationRange = maxElevation - minElevation;
-        
-        // Find closest point on chart
-        const chartX = Math.max(padding, Math.min(x, padding + chartWidth));
-        const relativeX = (chartX - padding) / chartWidth;
-        const pointIndex = Math.floor(relativeX * (elevations.length - 1));
-        
-        // Check if mouse is within chart bounds (Y-axis)
-        const chartY = Math.max(padding, Math.min(y, padding + chartHeight));
-        const relativeY = (chartY - padding) / chartHeight;
-        
-        // Only show hover if within chart area
-        if (pointIndex >= 0 && pointIndex < elevations.length && relativeY >= 0 && relativeY <= 1) {
-            const elevation = elevations[pointIndex];
-            const distance = cumulativeDistances[pointIndex];
-            const gradient = this.chartData.gradients[pointIndex];
-            
-            // DEBUG: Minimal logging for hover functionality
-            console.log("🖱️ HOVER: pointIndex=" + pointIndex + ", elevation=" + elevation + ", isPeak=" + (elevation === maxElevation));
-            
-            // Calculate actual chart position for tooltip
-            const tooltipX = padding + (pointIndex / (elevations.length - 1)) * chartWidth;
-            const tooltipY = padding + ((maxElevation - elevation) / elevationRange) * chartHeight;
-            
-            // Display hover info at actual chart position
-            this.showChartHoverInfo(tooltipX, tooltipY, elevation, distance, gradient);
-        } else {
-            // Hide hover if outside chart bounds
-            this.clearChartHover();
-        }
-    }
-    
-    clearChartHover() {
-        // Hide hover info
-        const hoverInfo = document.getElementById('chartHoverInfo');
-        if (hoverInfo) {
-            hoverInfo.style.display = 'none';
-        }
-    }
-    
-    showChartHoverInfo(x, y, elevation, distance, gradient) {
-        let hoverInfo = document.getElementById('chartHoverInfo');
-        
-        if (!hoverInfo) {
-            // Create hover info element if it doesn't exist
-            hoverInfo = document.createElement('div');
-            hoverInfo.id = 'chartHoverInfo';
-            hoverInfo.style.cssText = `
-                position: fixed;
-                background: rgba(0, 0, 0, 0.9);
-                color: white;
-                padding: 8px 12px;
-                border-radius: 6px;
-                font-size: 12px;
-                pointer-events: none;
-                z-index: 10000;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-                max-width: 200px;
-            `;
-            document.body.appendChild(hoverInfo);
-        }
-        
-        const useImperialUnits = document.getElementById('useImperialUnits')?.checked || false;
-        const elevationText = useImperialUnits ? 
-            Math.round(elevation * 3.28084) + ' ft' : 
-            Math.round(elevation) + ' m';
-        const distanceText = useImperialUnits ? 
-            (distance * 0.621371 / 1000).toFixed(2) + ' mi' : 
-            (distance / 1000).toFixed(2) + ' km';
-        const gradientText = gradient ? gradient.toFixed(1) + '%' : 'N/A';
-        
-        hoverInfo.innerHTML = `
-            <div><strong>Elevation:</strong> ${elevationText}</div>
-            <div><strong>Distance:</strong> ${distanceText}</div>
-            <div><strong>Grade:</strong> ${gradientText}</div>
-        `;
-        
-        hoverInfo.style.display = 'block';
-        hoverInfo.style.left = (x + 10) + 'px';
-        hoverInfo.style.top = (y - 40) + 'px';
-    }
+    // Chart hover functionality removed
     
     displayElevationStats(gain, loss, peak, min, routeData) {
         const routeInfoDiv = document.getElementById('routeInfo');
