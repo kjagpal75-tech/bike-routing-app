@@ -96,6 +96,10 @@ class BikeRoutePlanner {
         
         // Add click handler to map
         this.map.on('click', (e) => this.handleMapClick(e));
+        
+        // Add hover handler to map for elevation display
+        this.map.on('mousemove', (e) => this.handleMapHover(e));
+        this.map.on('mouseleave', () => this.clearMapHover());
     }
     
     // Unit conversion functions
@@ -2138,6 +2142,9 @@ class BikeRoutePlanner {
     async getElevationData(routePoints, routeData) {
         console.log('🏔️ Getting elevation data...');
         
+        // Store route data for map hover functionality
+        this.routePoints = routePoints;
+        
         try {
             // Sample points along the route (every 10th point to reduce API calls)
             const samplePoints = [];
@@ -2163,6 +2170,60 @@ class BikeRoutePlanner {
                 // Calculate elevation statistics
                 const elevations = elevationData.results.map(result => result.elevation);
                 console.log('🏔️ DEBUG: Elevations array - first=' + elevations[0] + ', last=' + elevations[elevations.length-1] + ', max=' + Math.max(...elevations) + ', length=' + elevations.length);
+                
+                // Store elevation data for map hover functionality
+                this.elevations = elevations;
+                console.log('🏔️ Stored elevations:', this.elevations.length, 'points');
+                
+                // Calculate gradients for map hover - align with elevation data
+                const gradients = [];
+                const cumulativeDistances = [];
+                let totalDistance = 0;
+                
+                for (let i = 0; i < elevations.length; i++) {
+                    // Calculate gradient
+                    if (i === 0) {
+                        gradients.push(0);
+                    } else {
+                        const elevationDiff = elevations[i] - elevations[i-1];
+                        // Find corresponding route points for this elevation point
+                        const routeIndex = Math.floor((i / elevations.length) * this.routePoints.length);
+                        const prevRouteIndex = Math.floor(((i-1) / elevations.length) * this.routePoints.length);
+                        
+                        if (prevRouteIndex < this.routePoints.length && routeIndex < this.routePoints.length) {
+                            const distance = this.calculateDistance(
+                                this.routePoints[prevRouteIndex].lat, 
+                                this.routePoints[prevRouteIndex].lng,
+                                this.routePoints[routeIndex].lat, 
+                                this.routePoints[routeIndex].lng
+                            );
+                            const gradient = (elevationDiff / distance) * 100;
+                            gradients.push(gradient);
+                            console.log(`🏔️ Gradient ${i}: elevationDiff=${elevationDiff}, distance=${distance}, gradient=${gradient}`);
+                        } else {
+                            gradients.push(0);
+                        }
+                    }
+                    
+                    // Calculate cumulative distance for this elevation point
+                    const routeIndex = Math.floor((i / elevations.length) * this.routePoints.length);
+                    if (routeIndex > 0 && routeIndex < this.routePoints.length) {
+                        const segmentDistance = this.calculateDistance(
+                            this.routePoints[routeIndex-1], 
+                            this.routePoints[routeIndex]
+                        );
+                        totalDistance += segmentDistance;
+                    }
+                    cumulativeDistances.push(totalDistance);
+                }
+                
+                this.gradients = gradients;
+                this.cumulativeDistances = cumulativeDistances;
+                console.log('🏔️ Calculated gradients:', this.gradients.length, 'values');
+                console.log('🏔️ Calculated cumulative distances:', this.cumulativeDistances.length, 'values');
+                console.log('🏔️ First few distance values:', this.cumulativeDistances.slice(0, 5));
+                console.log('🏔️ Map hover data ready - routePoints:', this.routePoints.length, 'elevations:', this.elevations.length, 'gradients:', this.gradients.length, 'cumulativeDistances:', this.cumulativeDistances.length);
+                
                 const elevationGain = this.calculateElevationGain(elevations);
                 const elevationLoss = this.calculateElevationLoss(elevations);
                 const peakElevation = Math.max(...elevations);
@@ -2551,7 +2612,129 @@ class BikeRoutePlanner {
         return loss;
     }
     
-    // Chart hover functionality removed
+    // Map hover functionality for elevation and gradient display
+    handleMapHover(event) {
+        // Only show hover if we have route data
+        if (!this.routePoints || !this.elevations || !this.gradients || !this.cumulativeDistances || this.routePoints.length === 0) {
+            console.log('🖱️ Map Hover: Missing data - routePoints:', !!this.routePoints, 'elevations:', !!this.elevations, 'gradients:', !!this.gradients, 'cumulativeDistances:', !!this.cumulativeDistances);
+            return;
+        }
+        
+        const mouseLatLng = event.latlng;
+        if (!mouseLatLng) return;
+        
+        // Find closest point on route to mouse position
+        let closestIndex = 0;
+        let minDistance = Infinity;
+        
+        for (let i = 0; i < this.routePoints.length; i++) {
+            const point = this.routePoints[i];
+            const distance = Math.sqrt(
+                Math.pow(mouseLatLng.lat - point.lat, 2) + 
+                Math.pow(mouseLatLng.lng - point.lng, 2)
+            );
+            
+            if (distance < minDistance) {
+                minDistance = distance;
+                closestIndex = i;
+            }
+        }
+        
+        // Get elevation and gradient data for closest point - map route index to elevation index
+        const sampleInterval = Math.max(1, Math.floor(this.routePoints.length / this.elevations.length));
+        const elevationIndex = Math.floor(closestIndex / sampleInterval);
+        
+        const elevation = this.elevations[elevationIndex] || 0;
+        const gradient = this.gradients[elevationIndex] || 0;
+        
+        // Calculate distance directly from route points
+        let distance = 0;
+        console.log(`🖱️ Distance calculation: closestIndex=${closestIndex}, routePoints.length=${this.routePoints.length}`);
+        
+        for (let i = 0; i < closestIndex && i < this.routePoints.length - 1; i++) {
+            const point1 = this.routePoints[i];
+            const point2 = this.routePoints[i+1];
+            const segmentDistance = this.calculateDistance(point1.lat, point1.lng, point2.lat, point2.lng);
+            console.log(`🖱️ Segment ${i}: distance=${segmentDistance}, point1=(${point1.lat},${point1.lng}), point2=(${point2.lat},${point2.lng})`);
+            distance += segmentDistance;
+        }
+        
+        console.log(`🖱️ Total distance calculated: ${distance}`);
+        
+        // Debug logging to check data
+        console.log(`🖱️ Map Hover: routeIndex=${closestIndex}, elevationIndex=${elevationIndex}, elevation=${elevation}, gradient=${gradient}, distance=${distance}`);
+        
+        // Show hover info
+        this.showMapHoverInfo(mouseLatLng, elevation, gradient, distance);
+    }
+    
+    clearMapHover() {
+        // Hide hover info
+        const hoverInfo = document.getElementById('mapHoverInfo');
+        if (hoverInfo) {
+            hoverInfo.style.display = 'none';
+        }
+    }
+    
+    showMapHoverInfo(latlng, elevation, gradient, distance) {
+        let hoverInfo = document.getElementById('mapHoverInfo');
+        
+        if (!hoverInfo) {
+            // Create hover info element if it doesn't exist
+            hoverInfo = document.createElement('div');
+            hoverInfo.id = 'mapHoverInfo';
+            hoverInfo.style.cssText = `
+                position: absolute;
+                background: rgba(0, 0, 0, 0.9);
+                color: white;
+                padding: 8px 12px;
+                border-radius: 6px;
+                font-size: 12px;
+                font-family: Arial, sans-serif;
+                pointer-events: none;
+                z-index: 1000;
+                display: none;
+                white-space: nowrap;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+                border: 1px solid rgba(255,255,255,0.2);
+            `;
+            document.body.appendChild(hoverInfo);
+        }
+        
+        // Format elevation and distance
+        const useImperial = document.getElementById('useImperialUnits');
+        const isImperial = useImperial ? useImperial.checked : false;
+        
+        const elevationText = isImperial ? 
+            Math.round(elevation * 3.28084) + ' ft' : 
+            Math.round(elevation) + ' m';
+        
+        const distanceText = isImperial ? 
+            (distance * 0.621371 / 1000).toFixed(2) + ' mi' : 
+            (distance / 1000).toFixed(2) + ' km';
+        
+        const gradientText = gradient ? 
+            (gradient > 0 ? '↑ ' + gradient.toFixed(1) + '%' : '↓ ' + Math.abs(gradient).toFixed(1) + '%') : 
+            '0%';
+        
+        // Set content
+        hoverInfo.innerHTML = `
+            <div style="margin-bottom: 4px; font-weight: bold;">📍 Route Point</div>
+            <div style="margin-bottom: 4px;"><strong>Elevation:</strong> ${elevationText}</div>
+            <div style="margin-bottom: 4px;"><strong>Distance:</strong> ${distanceText}</div>
+            <div><strong>Grade:</strong> ${gradientText}</div>
+        `;
+        
+        hoverInfo.style.display = 'block';
+        
+        // Position hover info near mouse
+        const mapContainer = document.getElementById('map');
+        const containerRect = mapContainer.getBoundingClientRect();
+        const point = this.map.latLngToContainerPoint(latlng);
+        
+        hoverInfo.style.left = (containerRect.left + point.x + 15) + 'px';
+        hoverInfo.style.top = (containerRect.top + point.y - 60) + 'px';
+    }
     
     displayElevationStats(gain, loss, peak, min, routeData) {
         const routeInfoDiv = document.getElementById('routeInfo');
