@@ -2764,36 +2764,25 @@ class BikeRoutePlanner {
         try {
             const gradients = [];
             
-            // Calculate gradient between consecutive elevation points
+            // Calculate gradient between consecutive elevation points using 50m run
             for (let i = 0; i < elevationData.length - 1; i++) {
                 const currentPoint = elevationData[i];
                 const nextPoint = elevationData[i + 1];
                 
-                if (currentPoint && nextPoint && routePoints && routePoints[i] && routePoints[i + 1]) {
+                if (currentPoint && nextPoint) {
                     const elevationChange = nextPoint.elevation - currentPoint.elevation;
                     
-                    // Calculate horizontal distance using Haversine formula (in meters)
-                    const lat1 = routePoints[i].lat * Math.PI / 180;
-                    const lat2 = routePoints[i + 1].lat * Math.PI / 180;
-                    const lon1 = routePoints[i].lng * Math.PI / 180;
-                    const lon2 = routePoints[i + 1].lng * Math.PI / 180;
+                    // Use fixed 50m run for consistent gradient calculation
+                    const fixedRun = 50; // 50 meters horizontal distance
                     
-                    const dLat = lat2 - lat1;
-                    const dLon = lon2 - lon1;
-                    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-                    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-                    const distance = 6371000 * c; // Earth's radius in meters
+                    // Calculate gradient using rise/run × 100 formula
+                    const gradient = (elevationChange / fixedRun) * 100;
                     
-                    // Only calculate gradient if we have meaningful distance (> 1 meter)
-                    if (distance > 1) {
-                        const gradient = (elevationChange / distance) * 100;
-                        
-                        // Filter out unrealistic gradients (> 30% or < -30%)
-                        if (Math.abs(gradient) <= 30) {
-                            gradients.push(gradient);
-                        } else {
-                            console.log(`🏔️ Filtering unrealistic gradient: ${gradient}% (distance: ${distance}m, elevation change: ${elevationChange}m)`);
-                        }
+                    // Filter out unrealistic gradients (> 30% or < -30%)
+                    if (Math.abs(gradient) <= 30) {
+                        gradients.push(gradient);
+                    } else {
+                        console.log(`🏔️ Filtering unrealistic gradient: ${gradient}% (elevation change: ${elevationChange}m over 50m run)`);
                     }
                 }
             }
