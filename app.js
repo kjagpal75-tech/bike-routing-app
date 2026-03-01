@@ -2024,7 +2024,12 @@ class BikeRoutePlanner {
             smoothFactor: 1
         }).addTo(this.map);
         
+        // Add hover functionality to route
+        this.routeLayer.on('mouseover', (e) => this.handleRouteHover(e));
+        this.routeLayer.on('mouseout', () => this.clearRouteHover());
+        
         console.log('🗺️ Route layer added to map');
+        console.log('🗺️ Route hover events attached');
         window.updateDebugPanel('MAP_RENDER', 'SUCCESS');
         
         // Debug: Check if layer was added correctly
@@ -2139,18 +2144,39 @@ class BikeRoutePlanner {
         console.log('🏔️ Getting elevation data...');
         
         try {
-            // Sample points along the route (every 10th point to reduce API calls)
+            // Sample points along the route every 50 meters
             const samplePoints = [];
-            const sampleInterval = Math.max(1, Math.floor(routePoints.length / 100)); // Max 100 points
+            let currentDistance = 0;
             
-            for (let i = 0; i < routePoints.length; i += sampleInterval) {
-                samplePoints.push(routePoints[i]);
+            // Always include the first point
+            samplePoints.push(routePoints[0]);
+            
+            // Sample every 50 meters along the route
+            for (let i = 1; i < routePoints.length; i++) {
+                const prevPoint = routePoints[i - 1];
+                const currentPoint = routePoints[i];
+                
+                // Calculate distance from previous point
+                const distance = this.calculateDistance(
+                    prevPoint.lat, prevPoint.lng,
+                    currentPoint.lat, currentPoint.lng
+                );
+                
+                currentDistance += distance;
+                
+                // If we've traveled at least 50 meters, add this point
+                if (currentDistance >= 50) {
+                    samplePoints.push(currentPoint);
+                    currentDistance = 0; // Reset distance counter
+                }
             }
             
-            // Add the last point to ensure we have the end elevation
+            // Always include the last point to ensure we have the end elevation
             if (samplePoints[samplePoints.length - 1] !== routePoints[routePoints.length - 1]) {
                 samplePoints.push(routePoints[routePoints.length - 1]);
             }
+            
+            console.log(`🏔️ 50m sampling: ${samplePoints.length} points from ${routePoints.length} total route points`);
             
             // Get elevation data from Open Elevation API
             const locations = samplePoints.map(point => `${point.lat},${point.lng}`).join('|');
@@ -2179,7 +2205,9 @@ class BikeRoutePlanner {
                     min: minElevation,
                     medianGrade: gradientStats.medianGrade,
                     maxGrade: gradientStats.maxGrade,
-                    minGrade: gradientStats.minGrade
+                    minGrade: gradientStats.minGrade,
+                    elevations: elevations, // Add elevations array for route hover
+                    gradients: gradientStats.gradients // Add gradients array for route hover
                 };
                 
                 console.log(`🏔️ Gradient statistics: median=${gradientStats.medianGrade}%, max=${gradientStats.maxGrade}%, min=${gradientStats.minGrade}%`);
@@ -2529,6 +2557,273 @@ class BikeRoutePlanner {
         ctx.font = '14px Arial';
         ctx.textAlign = 'center';
         ctx.fillText('Elevation Profile', width / 2, 20);
+        
+        // Store chart data for hover functionality
+        this.chartData = {
+            elevations,
+            gradients,
+            cumulativeDistances,
+            padding,
+            chartWidth,
+            chartHeight,
+            minElevation,
+            maxElevation,
+            totalDistance,
+            distanceStep,
+            numSteps
+        };
+        
+        // Add hover event listeners
+        canvas.addEventListener('mousemove', (e) => this.handleChartHover(e));
+        canvas.addEventListener('mouseleave', () => this.clearChartHover());
+    }
+    
+    handleChartHover(event) {
+        const canvas = document.getElementById('elevationChart');
+        if (!canvas || !this.chartData) return;
+        
+        const rect = canvas.getBoundingClientRect();
+        const x = event.clientX - rect.left;
+        const y = event.clientY - rect.top;
+        
+        const { padding, chartWidth, chartHeight, elevations, gradients, cumulativeDistances, totalDistance } = this.chartData;
+        
+        // Check if within chart area
+        if (x < padding || x > padding + chartWidth || y < padding || y > padding + chartHeight) {
+            this.clearChartHover();
+            return;
+        }
+        
+        // Calculate position along the route (0 to 1)
+        const relativeX = (x - padding) / chartWidth;
+        const routePosition = relativeX * (elevations.length - 1);
+        const pointIndex = Math.round(routePosition);
+        const clampedIndex = Math.max(0, Math.min(pointIndex, elevations.length - 1));
+        
+        // Get data for this position
+        const elevation = elevations[clampedIndex];
+        const gradient = gradients[clampedIndex] || 0;
+        const distance = cumulativeDistances[clampedIndex] || 0;
+        
+        this.showChartHoverInfo(event, elevation, distance, gradient);
+    }
+    
+    clearChartHover() {
+        const hoverInfo = document.getElementById('chartHoverInfo');
+        if (hoverInfo) hoverInfo.style.display = 'none';
+    }
+    
+    showChartHoverInfo(event, elevation, distance, gradient) {
+        let hoverInfo = document.getElementById('chartHoverInfo');
+        
+        if (!hoverInfo) {
+            hoverInfo = document.createElement('div');
+            hoverInfo.id = 'chartHoverInfo';
+            hoverInfo.style.cssText = `
+                position: fixed;
+                background: rgba(0, 0, 0, 0.9);
+                color: white;
+                padding: 8px 12px;
+                border-radius: 6px;
+                font-size: 12px;
+                font-family: Arial, sans-serif;
+                pointer-events: none;
+                z-index: 10000;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                max-width: 200px;
+                white-space: nowrap;
+            `;
+            document.body.appendChild(hoverInfo);
+        }
+        
+        const useImperialUnits = document.getElementById('useImperialUnits')?.checked || false;
+        const elevationText = useImperialUnits ? 
+            Math.round(elevation * 3.28084) + ' ft' : 
+            Math.round(elevation) + ' m';
+        const distanceText = useImperialUnits ? 
+            (distance * 0.621371 / 1000).toFixed(2) + ' mi' : 
+            (distance / 1000).toFixed(2) + ' km';
+        const gradientText = gradient ? gradient.toFixed(1) + '%' : 'N/A';
+        
+        hoverInfo.innerHTML = `
+            <div><strong>Elevation:</strong> ${elevationText}</div>
+            <div><strong>Distance:</strong> ${distanceText}</div>
+            <div><strong>Grade:</strong> ${gradientText}</div>
+        `;
+        
+        // Calculate position with screen boundary detection
+        let left = event.clientX + 10;
+        let top = event.clientY - 40;
+        
+        // Get tooltip dimensions
+        hoverInfo.style.display = 'block';
+        const tooltipRect = hoverInfo.getBoundingClientRect();
+        const tooltipWidth = tooltipRect.width;
+        const tooltipHeight = tooltipRect.height;
+        
+        // Screen boundaries
+        const screenWidth = window.innerWidth;
+        const screenHeight = window.innerHeight;
+        const margin = 10;
+        
+        // Adjust horizontal position if needed
+        if (left + tooltipWidth > screenWidth - margin) {
+            left = event.clientX - tooltipWidth - 10;
+        }
+        if (left < margin) {
+            left = margin;
+        }
+        
+        // Adjust vertical position if needed
+        if (top < margin) {
+            top = margin;
+        }
+        if (top + tooltipHeight > screenHeight - margin) {
+            top = event.clientY - tooltipHeight - 10;
+        }
+        
+        hoverInfo.style.left = left + 'px';
+        hoverInfo.style.top = top + 'px';
+    }
+    
+    handleRouteHover(event) {
+        if (!this.routeLayer || !this.currentElevationData) return;
+        
+        // Get mouse position on map
+        const mouseLatLng = this.map.mouseEventToLatLng(event.originalEvent);
+        if (!mouseLatLng) return;
+        
+        // Find closest point on route to mouse position
+        const routePoints = this.routeLayer.getLatLngs();
+        if (!routePoints || routePoints.length === 0) return;
+        
+        let minDistance = Infinity;
+        let closestPointIndex = 0;
+        let closestDistance = 0;
+        
+        // Find closest route point to mouse position
+        for (let i = 0; i < routePoints.length; i++) {
+            const point = routePoints[i];
+            const distance = this.calculateDistance(
+                mouseLatLng.lat, mouseLatLng.lng,
+                point.lat, point.lng
+            );
+            
+            if (distance < minDistance) {
+                minDistance = distance;
+                closestPointIndex = i;
+                closestDistance = distance;
+            }
+        }
+        
+        // Only show hover if close enough to route (within 50 meters)
+        if (minDistance > 50) {
+            this.clearRouteHover();
+            return;
+        }
+        
+        // Calculate cumulative distance to this point
+        let cumulativeDistance = 0;
+        for (let i = 0; i < closestPointIndex; i++) {
+            if (i < routePoints.length - 1) {
+                cumulativeDistance += this.calculateDistance(
+                    routePoints[i].lat, routePoints[i].lng,
+                    routePoints[i + 1].lat, routePoints[i + 1].lng
+                );
+            }
+        }
+        
+        // Get elevation and calculate gradient using 50m run
+        const elevation = this.currentElevationData.elevations ? 
+            this.currentElevationData.elevations[closestPointIndex] : 0;
+        
+        // Calculate gradient using 50m run method (same as chart)
+        let gradient = 0;
+        if (closestPointIndex > 0 && closestPointIndex < this.currentElevationData.elevations.length - 1) {
+            const elevationChange = this.currentElevationData.elevations[closestPointIndex + 1] - 
+                                this.currentElevationData.elevations[closestPointIndex];
+            gradient = (elevationChange / 50) * 100; // 50m run
+        }
+        
+        this.showRouteHoverInfo(event, elevation, cumulativeDistance, gradient);
+    }
+    
+    clearRouteHover() {
+        const hoverInfo = document.getElementById('routeHoverInfo');
+        if (hoverInfo) hoverInfo.style.display = 'none';
+    }
+    
+    showRouteHoverInfo(event, elevation, distance, gradient) {
+        let hoverInfo = document.getElementById('routeHoverInfo');
+        
+        if (!hoverInfo) {
+            hoverInfo = document.createElement('div');
+            hoverInfo.id = 'routeHoverInfo';
+            hoverInfo.style.cssText = `
+                position: fixed;
+                background: rgba(0, 0, 0, 0.9);
+                color: white;
+                padding: 8px 12px;
+                border-radius: 6px;
+                font-size: 12px;
+                font-family: Arial, sans-serif;
+                pointer-events: none;
+                z-index: 10000;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                max-width: 200px;
+                white-space: nowrap;
+            `;
+            document.body.appendChild(hoverInfo);
+        }
+        
+        const useImperialUnits = document.getElementById('useImperialUnits')?.checked || false;
+        const elevationText = useImperialUnits ? 
+            Math.round(elevation * 3.28084) + ' ft' : 
+            Math.round(elevation) + ' m';
+        const distanceText = useImperialUnits ? 
+            (distance * 0.621371 / 1000).toFixed(2) + ' mi' : 
+            (distance / 1000).toFixed(2) + ' km';
+        const gradientText = gradient ? gradient.toFixed(1) + '%' : 'N/A';
+        
+        hoverInfo.innerHTML = `
+            <div><strong>Elevation:</strong> ${elevationText}</div>
+            <div><strong>Distance:</strong> ${distanceText}</div>
+            <div><strong>Grade:</strong> ${gradientText}</div>
+        `;
+        
+        // Position with screen boundary detection
+        let left = event.originalEvent.clientX + 10;
+        let top = event.originalEvent.clientY - 40;
+        
+        // Get tooltip dimensions
+        hoverInfo.style.display = 'block';
+        const tooltipRect = hoverInfo.getBoundingClientRect();
+        const tooltipWidth = tooltipRect.width;
+        const tooltipHeight = tooltipRect.height;
+        
+        // Screen boundaries
+        const screenWidth = window.innerWidth;
+        const screenHeight = window.innerHeight;
+        const margin = 10;
+        
+        // Adjust horizontal position if needed
+        if (left + tooltipWidth > screenWidth - margin) {
+            left = event.originalEvent.clientX - tooltipWidth - 10;
+        }
+        if (left < margin) {
+            left = margin;
+        }
+        
+        // Adjust vertical position if needed
+        if (top < margin) {
+            top = margin;
+        }
+        if (top + tooltipHeight > screenHeight - margin) {
+            top = event.originalEvent.clientY - tooltipHeight - 10;
+        }
+        
+        hoverInfo.style.left = left + 'px';
+        hoverInfo.style.top = top + 'px';
     }
     
     calculateElevationGain(elevations) {
