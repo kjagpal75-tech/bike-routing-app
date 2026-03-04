@@ -2212,7 +2212,7 @@ class BikeRoutePlanner {
                 
                 console.log(`🏔️ Gradient statistics: median=${gradientStats.medianGrade}%, max=${gradientStats.maxGrade}%, min=${gradientStats.minGrade}%`);
                 
-                this.displayElevationProfile(elevationData.results, routeData);
+                this.displayElevationProfile(elevationData.results, routeData, routePoints);
             } else {
                 console.log('❌ No elevation data available');
                 this.showElevationUnavailable();
@@ -2224,7 +2224,7 @@ class BikeRoutePlanner {
         }
     }
     
-    displayElevationProfile(elevationData, routeData) {
+    displayElevationProfile(elevationData, routeData, routePoints) {
         const elevationDiv = document.getElementById('elevationProfile');
         if (!elevationDiv) return;
         
@@ -2240,13 +2240,51 @@ class BikeRoutePlanner {
             return distance;
         });
         
-        // Calculate cumulative distances
+        // Calculate cumulative distances matching 50m elevation sampling
         const cumulativeDistances = [];
         let totalDistance = 0;
-        for (let i = 0; i < distances.length; i++) {
-            cumulativeDistances.push(totalDistance);
-            totalDistance += distances[i];
+        
+        // Match the 50m sampling used for elevation data
+        cumulativeDistances.push(0); // First point at 0m
+        
+        let currentDistance = 0;
+        let sampleCount = 0;
+        
+        console.log(`🏔️ CUMULATIVE DISTANCE CALCULATION DEBUG:`);
+        console.log(`  - Starting calculation with ${routePoints.length} route points`);
+        
+        for (let i = 1; i < routePoints.length; i++) {
+            const prevPoint = routePoints[i - 1];
+            const currentPoint = routePoints[i];
+            
+            const distance = this.calculateDistance(
+                prevPoint.lat, prevPoint.lng,
+                currentPoint.lat, currentPoint.lng
+            );
+            
+            currentDistance += distance;
+            totalDistance += distance;
+            
+            // Add cumulative distance for every 50m sample
+            if (currentDistance >= 50) {
+                cumulativeDistances.push(totalDistance);
+                console.log(`  - Sample ${sampleCount + 1}: added at ${totalDistance.toFixed(1)}m (accumulated ${currentDistance.toFixed(1)}m)`);
+                sampleCount++;
+                currentDistance = 0; // Reset counter
+            }
         }
+        
+        // Add final cumulative distance
+        if (currentDistance > 0) {
+            totalDistance += currentDistance;
+            cumulativeDistances.push(totalDistance);
+            console.log(`  - Final sample: added at ${totalDistance.toFixed(1)}m (accumulated ${currentDistance.toFixed(1)}m)`);
+        }
+        
+        console.log(`🏔️ Cumulative distances: ${cumulativeDistances.length} points from ${sampleCount + 1} samples`);
+        console.log(`🏔️ Sample distances: [${cumulativeDistances.slice(0, 10).map(d => (d * 0.621371 / 1000).toFixed(2)).join(', ')}...]`);
+        console.log(`🏔️ Distance intervals: [${cumulativeDistances.slice(1, 10).map((d, i) => (d - cumulativeDistances[i]).toFixed(1)).join(', ')}...]`);
+        console.log(`🏔️ Expected 50m intervals, actual range: ${Math.min(...cumulativeDistances.slice(1).map((d, i) => d - cumulativeDistances[i])).toFixed(1)}m to ${Math.max(...cumulativeDistances.slice(1).map((d, i) => d - cumulativeDistances[i])).toFixed(1)}m`);
         
         const elevationGain = this.calculateElevationGain(elevations);
         const elevationLoss = this.calculateElevationLoss(elevations);
@@ -2376,24 +2414,30 @@ class BikeRoutePlanner {
     calculateGradientsForChart(elevations, cumulativeDistances) {
         const gradients = [];
         
+        // Calculate gradient using 50m run method (same as gradient statistics)
         for (let i = 0; i < elevations.length - 1; i++) {
             const elevationChange = elevations[i + 1] - elevations[i];
-            const distanceChange = cumulativeDistances[i + 1] - cumulativeDistances[i];
             
-            if (distanceChange > 0) {
-                const gradient = (elevationChange / distanceChange) * 100;
-                gradients.push(Math.max(-25, Math.min(25, gradient))); // Clamp to realistic range
+            // Use fixed 50m run for consistent gradient calculation
+            const fixedRun = 50; // 50 meters horizontal distance
+            
+            // Calculate gradient using rise/run × 100 formula
+            const gradient = (elevationChange / fixedRun) * 100;
+            
+            // Filter out unrealistic gradients (> 30% or < -30%)
+            if (Math.abs(gradient) <= 30) {
+                gradients.push(gradient);
             } else {
-                gradients.push(0);
+                console.log(`🏔️ Filtering unrealistic gradient: ${gradient}% (elevation change: ${elevationChange}m over 50m run)`);
             }
         }
         
         // Smooth gradients to eliminate noise
         const smoothedGradients = this.smoothGradients(gradients);
         
-        console.log(`🏔️ Original gradients: ${gradients.length}, Smoothed gradients: ${smoothedGradients.length}`);
-        console.log(`🏔️ Sample original: ${gradients.slice(0, 10).map(g => g.toFixed(1)).join(', ')}`);
-        console.log(`🏔️ Sample smoothed: ${smoothedGradients.slice(0, 10).map(g => g.toFixed(1)).join(', ')}`);
+        console.log(`🏔️ Chart gradients: ${gradients.length} calculated using 50m run method`);
+        console.log(`🏔️ Sample chart gradients: ${gradients.slice(0, 10).map(g => g.toFixed(1)).join(', ')}%`);
+        console.log(`🏔️ Smoothed gradients: ${smoothedGradients.length}`);
         
         return smoothedGradients;
     }
@@ -2468,20 +2512,19 @@ class BikeRoutePlanner {
             ctx.stroke();
         }
         
-        // Draw elevation profile - SIMPLE AND CLEAR
-        ctx.strokeStyle = '#FF0000'; // Bright red for visibility
-        ctx.lineWidth = 4; // Thicker line
+        // Calculate total distance first (needed for elevation drawing)
+        const totalDistance = cumulativeDistances[cumulativeDistances.length - 1] || 1000; // fallback to 1km
+        
+        // Draw elevation profile - USE CUMULATIVE DISTANCES FOR ACCURATE MAPPING
+        ctx.strokeStyle = '#FF0000';
+        ctx.lineWidth = 3;
         ctx.beginPath();
         
         elevations.forEach((elevation, i) => {
-            // Simple coordinate calculation
-            const x = padding + (i / (elevations.length - 1)) * chartWidth;
+            // Use cumulative distance for x-coordinate (not array index)
+            const distance = cumulativeDistances[i] || 0;
+            const x = padding + (distance / totalDistance) * chartWidth;
             const y = padding + chartHeight - ((elevation - minElevation) / elevationRange) * chartHeight;
-            
-            // Debug peak points
-            if (elevation === maxElevation) {
-                console.log('🏔️ DRAWING PEAK: elevation=' + elevation + 'm at x=' + x.toFixed(1) + ', y=' + y.toFixed(1));
-            }
             
             if (i === 0) {
                 ctx.moveTo(x, y);
@@ -2492,12 +2535,18 @@ class BikeRoutePlanner {
         
         ctx.stroke();
         
+        ctx.stroke();
+        
         // Draw peak marker
         const peakIndex = elevations.indexOf(maxElevation);
         if (peakIndex !== -1) {
-            const peakX = padding + (peakIndex / (elevations.length - 1)) * chartWidth;
-            const peakY = padding + chartHeight - ((maxElevation - minElevation) / elevationRange) * chartHeight; // Same Y as peak line
-            console.log('🏔️ PEAK MARKER: Drawing at x=' + peakX.toFixed(1) + ', y=' + peakY.toFixed(1));
+            const peakDistance = cumulativeDistances[peakIndex] || 0;
+            const peakX = padding + (peakDistance / totalDistance) * chartWidth;
+            const peakY = padding + chartHeight - ((maxElevation - minElevation) / elevationRange) * chartHeight;
+            const peakDistanceInMiles = (peakDistance * 0.621371 / 1000).toFixed(2);
+            const peakElevationInFeet = Math.round(maxElevation * 3.28084);
+            
+            console.log(`🏔️ PEAK MARKER: Point ${peakIndex} at ${peakDistanceInMiles}mi, ${peakElevationInFeet}ft, canvas (${peakX.toFixed(1)}, ${peakY.toFixed(1)})`);
             
             ctx.fillStyle = '#FF0000';
             ctx.beginPath();
@@ -2520,20 +2569,23 @@ class BikeRoutePlanner {
             ctx.fillText(elevationText, padding - 5, y + 4);
         }
         
-        // X-axis labels (distance)
+        // X-axis labels (distance) - align with actual sampling
         ctx.textAlign = 'center';
-        const totalDistance = cumulativeDistances[cumulativeDistances.length - 1] || 1000; // fallback to 1km
-        const distanceStep = Math.ceil(totalDistance / 5 / 1000) * 1000; // Round to nearest km
-        const numSteps = Math.ceil(totalDistance / distanceStep);
         
-        for (let i = 0; i <= numSteps; i++) {
+        // Use smaller, more frequent grid lines that align better with 50m sampling
+        const numGridLines = Math.min(10, Math.max(5, Math.floor(totalDistance / 500))); // Grid every ~500m
+        const distanceStep = totalDistance / numGridLines;
+        
+        // Draw grid lines and labels
+        for (let i = 0; i <= numGridLines; i++) {
             const distance = i * distanceStep;
             const x = padding + (distance / totalDistance) * chartWidth;
             
             // Draw distance label
             const distanceText = useImperialUnits ? 
-                (distance * 0.621371 / 1000).toFixed(1) + ' mi' : 
-                (distance / 1000).toFixed(1) + ' km';
+                (distance * 0.621371 / 1000).toFixed(2) + ' mi' : 
+                (distance / 1000).toFixed(2) + ' km';
+            
             ctx.fillText(distanceText, x, height - padding + 20);
             
             // Draw vertical grid line
@@ -2544,6 +2596,89 @@ class BikeRoutePlanner {
             ctx.lineTo(x, height - padding);
             ctx.stroke();
         }
+        
+        // Debug elevation point positions vs grid lines
+        console.log(`🏔️ COORDINATE MAPPING DEBUG:`);
+        console.log(`🏔️ Chart area: x=${padding} to ${padding + chartWidth}, y=${padding} to ${padding + chartHeight}`);
+        console.log(`🏔️ Elevation range: ${minElevation.toFixed(1)}m to ${maxElevation.toFixed(1)}m (range=${elevationRange.toFixed(1)}m)`);
+        console.log(`🏔️ Distance range: 0m to ${totalDistance.toFixed(1)}m`);
+        console.log(`🏔️ Array lengths: elevations=${elevations.length}, cumulativeDistances=${cumulativeDistances.length}`);
+        
+        // Find the actual highest elevation point
+        const maxElevationIndex = elevations.indexOf(maxElevation);
+        const maxElevationDistance = cumulativeDistances[maxElevationIndex] || 0;
+        const maxElevationX = padding + (maxElevationDistance / totalDistance) * chartWidth;
+        const maxElevationY = padding + chartHeight - ((maxElevation - minElevation) / elevationRange) * chartHeight;
+        const maxElevationDistanceInMiles = (maxElevationDistance * 0.621371 / 1000).toFixed(2);
+        const maxElevationInFeet = Math.round(maxElevation * 3.28084);
+        
+        console.log(`🏔️ HIGHEST ELEVATION POINT:`);
+        console.log(`🏔️ Point ${maxElevationIndex}: ${maxElevationDistanceInMiles}mi, ${maxElevationInFeet}ft`);
+        console.log(`  - Distance: ${maxElevationDistance.toFixed(1)}m, x=${maxElevationX.toFixed(1)}`);
+        console.log(`  - Elevation: ${maxElevation.toFixed(1)}m, y=${maxElevationY.toFixed(1)}`);
+        
+        // Debug first few elevation points with coordinate calculations
+        console.log(`🏔️ FIRST 5 POINTS DETAIL:`);
+        for (let i = 0; i < Math.min(5, elevations.length); i++) {
+            const elevation = elevations[i];
+            const distance = cumulativeDistances[i] || 0;
+            
+            // Calculate x and y coordinates step by step
+            const xRatio = distance / totalDistance;
+            const x = padding + xRatio * chartWidth;
+            
+            const yRatio = (elevation - minElevation) / elevationRange;
+            const y = padding + chartHeight - yRatio * chartHeight;
+            
+            const distanceInMiles = (distance * 0.621371 / 1000).toFixed(2);
+            const elevationInFeet = Math.round(elevation * 3.28084);
+            
+            console.log(`🏔️ Point ${i}: ${distanceInMiles}mi, ${elevationInFeet}ft`);
+            console.log(`  - Distance: ${distance.toFixed(1)}m, ratio=${xRatio.toFixed(3)}, x=${x.toFixed(1)}`);
+            console.log(`  - Elevation: ${elevation.toFixed(1)}m, ratio=${yRatio.toFixed(3)}, y=${y.toFixed(1)}`);
+        }
+        
+        // Debug last point
+        const lastIndex = elevations.length - 1;
+        const lastElevation = elevations[lastIndex];
+        const lastDistance = cumulativeDistances[lastIndex] || 0;
+        const lastXRatio = lastDistance / totalDistance;
+        const lastX = padding + lastXRatio * chartWidth;
+        const lastYRatio = (lastElevation - minElevation) / elevationRange;
+        const lastY = padding + chartHeight - lastYRatio * chartHeight;
+        const lastDistanceInMiles = (lastDistance * 0.621371 / 1000).toFixed(2);
+        const lastElevationInFeet = Math.round(lastElevation * 3.28084);
+        
+        console.log(`🏔️ LAST POINT DETAIL:`);
+        console.log(`🏔️ Point ${lastIndex}: ${lastDistanceInMiles}mi, ${lastElevationInFeet}ft`);
+        console.log(`  - Distance: ${lastDistance.toFixed(1)}m, ratio=${lastXRatio.toFixed(3)}, x=${lastX.toFixed(1)}`);
+        console.log(`  - Elevation: ${lastElevation.toFixed(1)}m, ratio=${lastYRatio.toFixed(3)}, y=${lastY.toFixed(1)}`);
+        
+        // Check if arrays are properly aligned
+        if (elevations.length !== cumulativeDistances.length) {
+            console.error(`🚨 ARRAY MISMATCH: elevations.length (${elevations.length}) != cumulativeDistances.length (${cumulativeDistances.length})`);
+        }
+        
+        // Find elevation points near grid lines for comparison
+        elevations.forEach((elevation, i) => {
+            const distance = cumulativeDistances[i] || 0;
+            const x = padding + (distance / totalDistance) * chartWidth;
+            const y = padding + chartHeight - ((elevation - minElevation) / elevationRange) * chartHeight;
+            
+            const distanceInMiles = (distance * 0.621371 / 1000).toFixed(2);
+            const elevationInFeet = Math.round(elevation * 3.28084);
+            
+            // Check if this point is near a grid line (within 10 pixels)
+            for (let j = 0; j <= numGridLines; j++) {
+                const gridDistance = j * distanceStep;
+                const gridX = padding + (gridDistance / totalDistance) * chartWidth;
+                const gridDistanceInMiles = (gridDistance * 0.621371 / 1000).toFixed(2);
+                
+                if (Math.abs(x - gridX) < 10) {
+                    console.log(`🏔️ NEAR GRID: Point ${i} (${distanceInMiles}mi, ${elevationInFeet}ft) at x=${x.toFixed(1)} near grid ${gridDistanceInMiles}mi at x=${gridX.toFixed(1)}`);
+                }
+            }
+        });
         
         // Draw x-axis line
         ctx.strokeStyle = '#333';
@@ -2570,120 +2705,9 @@ class BikeRoutePlanner {
             maxElevation,
             totalDistance,
             distanceStep,
-            numSteps
+            numGridLines
         };
         
-        // Add hover event listeners
-        canvas.addEventListener('mousemove', (e) => this.handleChartHover(e));
-        canvas.addEventListener('mouseleave', () => this.clearChartHover());
-    }
-    
-    handleChartHover(event) {
-        const canvas = document.getElementById('elevationChart');
-        if (!canvas || !this.chartData) return;
-        
-        const rect = canvas.getBoundingClientRect();
-        const x = event.clientX - rect.left;
-        const y = event.clientY - rect.top;
-        
-        const { padding, chartWidth, chartHeight, elevations, gradients, cumulativeDistances, totalDistance } = this.chartData;
-        
-        // Check if within chart area
-        if (x < padding || x > padding + chartWidth || y < padding || y > padding + chartHeight) {
-            this.clearChartHover();
-            return;
-        }
-        
-        // Calculate position along the route (0 to 1)
-        const relativeX = (x - padding) / chartWidth;
-        const routePosition = relativeX * (elevations.length - 1);
-        const pointIndex = Math.round(routePosition);
-        const clampedIndex = Math.max(0, Math.min(pointIndex, elevations.length - 1));
-        
-        // Get data for this position
-        const elevation = elevations[clampedIndex];
-        const gradient = gradients[clampedIndex] || 0;
-        const distance = cumulativeDistances[clampedIndex] || 0;
-        
-        this.showChartHoverInfo(event, elevation, distance, gradient);
-    }
-    
-    clearChartHover() {
-        const hoverInfo = document.getElementById('chartHoverInfo');
-        if (hoverInfo) hoverInfo.style.display = 'none';
-    }
-    
-    showChartHoverInfo(event, elevation, distance, gradient) {
-        let hoverInfo = document.getElementById('chartHoverInfo');
-        
-        if (!hoverInfo) {
-            hoverInfo = document.createElement('div');
-            hoverInfo.id = 'chartHoverInfo';
-            hoverInfo.style.cssText = `
-                position: fixed;
-                background: rgba(0, 0, 0, 0.9);
-                color: white;
-                padding: 8px 12px;
-                border-radius: 6px;
-                font-size: 12px;
-                font-family: Arial, sans-serif;
-                pointer-events: none;
-                z-index: 10000;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-                max-width: 200px;
-                white-space: nowrap;
-            `;
-            document.body.appendChild(hoverInfo);
-        }
-        
-        const useImperialUnits = document.getElementById('useImperialUnits')?.checked || false;
-        const elevationText = useImperialUnits ? 
-            Math.round(elevation * 3.28084) + ' ft' : 
-            Math.round(elevation) + ' m';
-        const distanceText = useImperialUnits ? 
-            (distance * 0.621371 / 1000).toFixed(2) + ' mi' : 
-            (distance / 1000).toFixed(2) + ' km';
-        const gradientText = gradient ? gradient.toFixed(1) + '%' : 'N/A';
-        
-        hoverInfo.innerHTML = `
-            <div><strong>Elevation:</strong> ${elevationText}</div>
-            <div><strong>Distance:</strong> ${distanceText}</div>
-            <div><strong>Grade:</strong> ${gradientText}</div>
-        `;
-        
-        // Calculate position with screen boundary detection
-        let left = event.clientX + 10;
-        let top = event.clientY - 40;
-        
-        // Get tooltip dimensions
-        hoverInfo.style.display = 'block';
-        const tooltipRect = hoverInfo.getBoundingClientRect();
-        const tooltipWidth = tooltipRect.width;
-        const tooltipHeight = tooltipRect.height;
-        
-        // Screen boundaries
-        const screenWidth = window.innerWidth;
-        const screenHeight = window.innerHeight;
-        const margin = 10;
-        
-        // Adjust horizontal position if needed
-        if (left + tooltipWidth > screenWidth - margin) {
-            left = event.clientX - tooltipWidth - 10;
-        }
-        if (left < margin) {
-            left = margin;
-        }
-        
-        // Adjust vertical position if needed
-        if (top < margin) {
-            top = margin;
-        }
-        if (top + tooltipHeight > screenHeight - margin) {
-            top = event.clientY - tooltipHeight - 10;
-        }
-        
-        hoverInfo.style.left = left + 'px';
-        hoverInfo.style.top = top + 'px';
     }
     
     handleRouteHover(event) {
@@ -2733,17 +2757,17 @@ class BikeRoutePlanner {
             }
         }
         
-        // Get elevation and calculate gradient using 50m run
+        // Get elevation and gradient from pre-calculated arrays (same as chart)
         const elevation = this.currentElevationData.elevations ? 
             this.currentElevationData.elevations[closestPointIndex] : 0;
+        const gradient = this.currentElevationData.gradients ? 
+            this.currentElevationData.gradients[closestPointIndex] : 0;
         
-        // Calculate gradient using 50m run method (same as chart)
-        let gradient = 0;
-        if (closestPointIndex > 0 && closestPointIndex < this.currentElevationData.elevations.length - 1) {
-            const elevationChange = this.currentElevationData.elevations[closestPointIndex + 1] - 
-                                this.currentElevationData.elevations[closestPointIndex];
-            gradient = (elevationChange / 50) * 100; // 50m run
-        }
+        console.log(`🔍 Route hover using pre-calculated data:`);
+        console.log(`  - Closest point index: ${closestPointIndex}`);
+        console.log(`  - Elevation: ${elevation}`);
+        console.log(`  - Gradient: ${gradient}%`);
+        console.log(`  - Total gradients: ${this.currentElevationData.gradients ? this.currentElevationData.gradients.length : 'undefined'}`);
         
         this.showRouteHoverInfo(event, elevation, cumulativeDistance, gradient);
     }
