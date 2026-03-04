@@ -815,7 +815,7 @@ class BikeRoutePlanner {
     }
     
     handleMapClick(e) {
-        // Set start point first, then end point - NO WAYPOINT CREATION FROM MAP CLICKS
+        // Set start point first, then end point, then waypoints
         if (!this.startMarker) {
             this.setStartPoint(e.latlng);
         } else if (!this.endMarker) {
@@ -827,9 +827,9 @@ class BikeRoutePlanner {
             }
             this.setEndPoint(e.latlng);
         } else {
-            // WAYPOINT CREATION DISABLED - Use the "+" button instead
-            console.log('🚫 Waypoint creation from map clicks is disabled. Use the "+" button to add waypoints.');
-            return;
+            // Add waypoint when both start and end points exist
+            console.log('📍 Adding waypoint from map click at:', e.latlng);
+            this.addWaypoint(e.latlng);
         }
     }
     
@@ -1394,7 +1394,7 @@ class BikeRoutePlanner {
             const routeType = routeTypeSelect ? routeTypeSelect.value : 'drive';
             
             const routingApiSelect = document.getElementById('routingApi');
-            const routingApi = routingApiSelect ? routingApiSelect.value : 'osrm';
+            const routingApi = routingApiSelect ? routingApiSelect.value : 'valhalla';
             
             console.log(`🌐 Using routing API: ${routingApi}`);
             console.log(`🔄 Return to start: ${returnToStart}`);
@@ -2956,7 +2956,7 @@ class BikeRoutePlanner {
         // Handle different API formats
         let processedSteps;
         const routingApi = document.getElementById('routingApi');
-        const apiType = routingApi ? routingApi.value : 'osrm';
+        const apiType = routingApi ? routingApi.value : 'valhalla';
         
         console.log(`🔍 Processing directions for API type: ${apiType}`);
         console.log(`🔍 Total steps received: ${steps.length}`);
