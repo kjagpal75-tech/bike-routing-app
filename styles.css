@@ -320,13 +320,12 @@ body {
 /* Waypoint Suggestions */
 .waypoint-suggestions {
     position: absolute;
-    top: 100%;
+    top: calc(100% + 5px);
     left: 0;
     right: 0;
     background: white;
     border: 1px solid #e0e0e0;
-    border-top: none;
-    border-radius: 0 0 6px 6px;
+    border-radius: 6px;
     max-height: 200px;
     overflow-y: auto;
     z-index: 1000;
