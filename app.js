@@ -1467,11 +1467,10 @@ class BikeRoutePlanner {
                         })),
                         costing: valhallaProfile,
                         directions_maneuvers: true,
-                        geometry: true,
                         units: 'kilometers'
                     };
                     
-                    apiUrl = `/valhalla/route?json=${encodeURIComponent(JSON.stringify(valhallaData))}`;
+                    apiUrl = `https://valhalla1.openstreetmap.de/route?json=${encodeURIComponent(JSON.stringify(valhallaData))}`;
                     
                     console.log(`🛣️ Valhalla direct API URL: ${apiUrl}`);
                     console.log(`🛣️ Using profile: ${valhallaProfile}`);
@@ -1566,6 +1565,17 @@ class BikeRoutePlanner {
             // Clear request body after use
             this.valhallaRequestBody = null;
             this.orsRequestBody = null;
+            
+            // Check if response is actually JSON before parsing
+            const contentType = response.headers.get('content-type');
+            console.log(`🌐 Response content-type: ${contentType}`);
+            console.log(`🌐 Response status: ${response.status}`);
+            
+            if (!contentType || !contentType.includes('application/json')) {
+                const text = await response.text();
+                console.error(`❌ Expected JSON but got ${contentType || 'unknown'}:`, text.substring(0, 200));
+                throw new Error(`API returned ${contentType || 'unknown'} instead of JSON. Status: ${response.status}`);
+            }
             
             let data = await response.json();
             console.log(`🌐 API Response:`, data);
