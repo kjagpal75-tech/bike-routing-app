@@ -1109,6 +1109,21 @@ class BikeRoutePlanner {
             });
             suggestionDiv.addEventListener('click', () => {
                 this.selectWaypointSuggestion(result, waypointId);
+            });
+            
+            suggestionsDiv.appendChild(suggestionDiv);
+        });
+        
+        // Find the specific waypoint input and position suggestions below it
+        const waypointInput = document.getElementById(`waypointInput${waypointId}`);
+        if (waypointInput) {
+            const inputRect = waypointInput.getBoundingClientRect();
+            suggestionsDiv.style.position = 'fixed';
+            suggestionsDiv.style.top = (inputRect.bottom + 5) + 'px';
+            suggestionsDiv.style.left = inputRect.left + 'px';
+            suggestionsDiv.style.width = inputRect.width + 'px';
+            document.body.appendChild(suggestionsDiv);
+        }
     }
     
     hideWaypointSuggestions(waypointId) {
