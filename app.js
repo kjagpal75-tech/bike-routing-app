@@ -390,7 +390,7 @@ class BikeRoutePlanner {
             });
             
             suggestionsDiv.appendChild(suggestionDiv);
-        });
+        }); // Added missing closing parenthesis
         
         // Position suggestions below the input
         const input = document.getElementById(`${type}Input`);
@@ -1109,21 +1109,6 @@ class BikeRoutePlanner {
             });
             suggestionDiv.addEventListener('click', () => {
                 this.selectWaypointSuggestion(result, waypointId);
-            });
-            
-            suggestionsDiv.appendChild(suggestionDiv);
-        });
-        
-        // Find the waypoint input and position suggestions below it
-        const waypointInput = document.querySelector(`.waypoint-item input`);
-        if (waypointInput && waypointInput.closest('.waypoint-item').querySelector(`input[placeholder*="California"]`)) {
-            const waypointItem = waypointInput.closest('.waypoint-item');
-            waypointItem.style.position = 'relative';
-            suggestionsDiv.style.top = waypointInput.offsetHeight + 'px';
-            suggestionsDiv.style.left = '0';
-            suggestionsDiv.style.right = '0';
-            waypointItem.appendChild(suggestionsDiv);
-        }
     }
     
     hideWaypointSuggestions(waypointId) {
