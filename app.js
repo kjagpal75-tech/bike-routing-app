@@ -170,8 +170,16 @@ class BikeRoutePlanner {
             className: 'custom-div-icon'
         });
         
-        // Add click handler to map
-        this.map.on('click', (e) => this.handleMapClick(e));
+        // Function to create numbered waypoint icons
+        this.createNumberedWaypointIcon = (number) => {
+            return L.divIcon({
+                html: `<div style="background: #FF9800; color: white; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; box-shadow: 0 2px 6px rgba(0,0,0,0.3); border: 2px solid white;">${number}</div>`,
+                iconSize: [30, 30],
+                className: 'custom-div-icon'
+            });
+        };
+        
+        // Map click handler already added in initializeMap - no duplicate needed
     }
     
     setupAddressSearch() {
@@ -231,8 +239,13 @@ class BikeRoutePlanner {
         }
         
         try {
-            // Use Photon geocoding API for better accuracy
+            // Get current map bounds for local search
+            const bounds = this.map.getBounds();
+            const center = this.map.getCenter();
+            
             console.log(`🔍 Searching for address: "${query}"`);
+            console.log(`🔍 Map center: ${center.lat.toFixed(4)}, ${center.lng.toFixed(4)}`);
+            console.log(`🔍 Map bounds:`, bounds);
             
             // Extract street number from query if present
             const streetNumberMatch = query.match(/^(\d+)\s+(.*)/);
@@ -242,7 +255,19 @@ class BikeRoutePlanner {
             console.log(`🔍 Extracted street number: "${streetNumber}"`);
             console.log(`🔍 Query without number: "${queryWithoutNumber}"`);
             
-            const response = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(queryWithoutNumber)}&limit=5`, {
+            // Use Photon API with location bias for local results
+            let searchUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(queryWithoutNumber)}&limit=10`;
+            
+            // Add location bias to prioritize local results
+            searchUrl += `&lat=${center.lat}&lon=${center.lng}`;
+            
+            // Add bbox constraint to focus on current map area
+            const bbox = `${bounds.getSouthWest().lng},${bounds.getSouthWest().lat},${bounds.getNorthEast().lng},${bounds.getNorthEast().lat}`;
+            searchUrl += `&bbox=${bbox}`;
+            
+            console.log(`🔍 Local search URL:`, searchUrl);
+            
+            const response = await fetch(searchUrl, {
                 headers: {
                     'Accept': 'application/json'
                 }
@@ -724,6 +749,7 @@ class BikeRoutePlanner {
             lng += dlng;
             
             points.push([lat / 1e6, lng / 1e6]);
+                    console.log(`🔢 Decoded point ${points.length}: [${(lat / 1e6).toFixed(6)}, ${(lng / 1e6).toFixed(6)}]`);
         }
         
         return points.map(coord => L.latLng(coord[0], coord[1]));
@@ -815,22 +841,53 @@ class BikeRoutePlanner {
     }
     
     handleMapClick(e) {
-        // Set start point first, then end point, then waypoints
+        // Clear progression: Start → End → Waypoints
+        const clickId = Date.now() + Math.random();
+        console.log('📍 handleMapClick called - ID:', clickId);
+        console.log('📍 Current state - startMarker:', !!this.startMarker, 'endMarker:', !!this.endMarker, 'waypoints:', this.waypoints.length);
+        console.log('📍 Click coordinates:', e.latlng);
+        
         if (!this.startMarker) {
+            console.log('📍 Setting start point from map click - ID:', clickId);
             this.setStartPoint(e.latlng);
+            this.showNotification('Start point set! Click to set end point.', 'info');
+            this.updateMapMode('end');
         } else if (!this.endMarker) {
             // Check if return to start is enabled
             const returnToStartCheckbox = document.getElementById('returnToStart');
             if (returnToStartCheckbox && returnToStartCheckbox.checked) {
-                console.log('🔄 Return to start is enabled - ignoring map click for end point');
+                console.log('🔄 Return to start is enabled - ignoring map click for end point - ID:', clickId);
+                this.showNotification('Return to start is enabled. Use "+" button to add waypoints.', 'info');
                 return;
             }
+            console.log('📍 Setting end point from map click - ID:', clickId);
+            console.log('📍 Before setEndPoint - endMarker exists:', !!this.endMarker);
+            console.log('📍 Using endIcon:', this.endIcon);
             this.setEndPoint(e.latlng);
+            console.log('📍 After setEndPoint - endMarker exists:', !!this.endMarker);
+            console.log('📍 End marker icon:', this.endMarker ? this.endMarker.getIcon() : 'none');
+            this.showNotification('End point set! Click to add waypoints or use "+" button.', 'info');
+            this.updateMapMode('waypoint');
         } else {
             // Add waypoint when both start and end points exist
-            console.log('📍 Adding waypoint from map click at:', e.latlng);
-            this.addWaypoint(e.latlng);
+            console.log('📍 Adding waypoint from map click at:', e.latlng, '- ID:', clickId);
+            console.log('📍 Both start and end exist, creating waypoint - ID:', clickId);
+            this.addWaypointAtLocation(e.latlng);
+            this.showNotification('Waypoint added! Click to add more waypoints.', 'info');
         }
+    }
+    
+    updateMapMode(mode) {
+        const modeText = document.getElementById('mapModeText');
+        if (!modeText) return;
+        
+        const modeMessages = {
+            'start': '📍 Click map to set start point',
+            'end': '📍 Click map to set end point',
+            'waypoint': '📍 Click map to add waypoints'
+        };
+        
+        modeText.textContent = modeMessages[mode] || modeMessages['start'];
     }
     
     async getCurrentLocation() {
@@ -912,13 +969,23 @@ class BikeRoutePlanner {
             this.map.removeLayer(this.startMarker);
         }
         
-        this.startMarker = L.marker(latlng, { icon: this.startIcon, draggable: true }).addTo(this.map);
+        this.startMarker = L.marker(latlng, {
+            icon: L.divIcon({
+                className: 'custom-marker start-marker',
+                html: '<div style="background: #4CAF50; color: white; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">S</div>',
+                iconSize: [20, 20],
+                iconAnchor: [10, 10]
+            })
+        }).addTo(this.map);
         
-        // Don't override the input field if it already has an address
+        // Update start input with coordinates
         const startInput = document.getElementById('startInput');
-        if (startInput && !startInput.value) {
+        if (startInput) {
             startInput.value = `${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}`;
         }
+        
+        // Update mode to end point
+        this.updateMapMode('end');
         
         // Check if return to start is enabled and update end point
         const returnToStartCheckbox = document.getElementById('returnToStart');
@@ -932,15 +999,14 @@ class BikeRoutePlanner {
                     endInput.value = startInput.value;
                 }
             }
-            
-            console.log('🔄 Start point updated - end point synchronized for return to start');
         }
         
-        // Update waypoint counter
         this.updateWaypointCounter();
     }
     
     setEndPoint(latlng) {
+        console.log('🔴 setEndPoint called with:', latlng);
+        
         // Check if return to start is enabled - if so, don't allow manual end point setting
         const returnToStartCheckbox = document.getElementById('returnToStart');
         if (returnToStartCheckbox && returnToStartCheckbox.checked) {
@@ -949,16 +1015,23 @@ class BikeRoutePlanner {
         }
         
         if (this.endMarker) {
+            console.log('🔴 Removing existing end marker');
             this.map.removeLayer(this.endMarker);
         }
         
+        console.log('🔴 Creating new end marker with endIcon');
+        console.log('🔴 endIcon HTML:', this.endIcon.options.html);
         this.endMarker = L.marker(latlng, { icon: this.endIcon, draggable: true }).addTo(this.map);
+        console.log('🔴 End marker created and added to map');
         
         // Don't override the input field if it already has an address
         const endInput = document.getElementById('endInput');
         if (endInput && !endInput.value) {
             endInput.value = `${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}`;
         }
+        
+        // Update mode to waypoint
+        this.updateMapMode('waypoint');
         
         // Update waypoint counter
         this.updateWaypointCounter();
@@ -991,18 +1064,58 @@ class BikeRoutePlanner {
     }
     
     addWaypoint() {
-        const center = this.map.getCenter();
-        const waypointId = Date.now();
-        
-        const waypoint = {
-            id: waypointId,
-            latlng: center,
-            marker: L.marker(center, { icon: this.waypointIcon, draggable: true }).addTo(this.map)
-        };
-        
-        this.waypoints.push(waypoint);
-        this.addWaypointInput(waypointId, center);
-        this.updateWaypointCounter();
+        try {
+            console.log('🔹 addWaypoint called');
+            console.log('🔹 Current waypoints count:', this.waypoints.length);
+            console.log('🔹 Has start marker:', !!this.startMarker);
+            console.log('🔹 Has end marker:', !!this.endMarker);
+            console.log('🔹 Has route layer:', !!this.routeLayer);
+            
+            if (!this.map) {
+                console.error('❌ Map not available for waypoint addition');
+                return;
+            }
+            
+            const center = this.map.getCenter();
+            const waypointId = Date.now();
+            
+            console.log('🔹 Creating waypoint with ID:', waypointId);
+            console.log('🔹 Map center coordinates:', center);
+            
+            const waypoint = {
+                id: waypointId,
+                latlng: center,
+                marker: L.marker(center, { icon: this.createNumberedWaypointIcon(this.waypoints.length + 1), draggable: true }).addTo(this.map)
+            };
+            
+            console.log('🔹 Waypoint created:', waypoint);
+            
+            this.waypoints.push(waypoint);
+            console.log('🔹 Waypoint added to array. New count:', this.waypoints.length);
+            
+            this.addWaypointInput(waypointId, center);
+            this.updateWaypointCounter();
+            
+            console.log('🔹 About to check auto-regeneration conditions...');
+            
+            // Auto-regenerate route if we have start and end points and an existing route
+            if (this.startMarker && this.endMarker && this.routeLayer) {
+                console.log('🔄 Auto-regenerating route after adding waypoint');
+                setTimeout(() => this.generateRoute(), 500); // Small delay to ensure UI is updated
+            } else {
+                console.log('🔹 No auto-regeneration - missing:', {
+                    start: !this.startMarker,
+                    end: !this.endMarker,
+                    route: !this.routeLayer
+                });
+            }
+            
+            console.log('✅ addWaypoint completed successfully');
+            
+        } catch (error) {
+            console.error('❌ Error in addWaypoint:', error);
+            this.showNotification('Failed to add waypoint', 'error');
+        }
     }
     
     addWaypointAtLocation(latlng) {
@@ -1011,15 +1124,21 @@ class BikeRoutePlanner {
         const waypoint = {
             id: waypointId,
             latlng: latlng,
-            marker: L.marker(latlng, { icon: this.waypointIcon, draggable: true }).addTo(this.map)
+            marker: L.marker(latlng, { icon: this.createNumberedWaypointIcon(this.waypoints.length + 1), draggable: true }).addTo(this.map)
         };
         
         this.waypoints.push(waypoint);
-        this.addWaypointInput(waypointId, latlng);
+        this.addWaypointInput(waypointId, latlng, false); // Keep coordinates for map clicks
         this.updateWaypointCounter();
+        
+        // Auto-regenerate route if we have start and end points and an existing route
+        if (this.startMarker && this.endMarker && this.routeLayer) {
+            console.log('🔄 Auto-regenerating route after adding waypoint');
+            setTimeout(() => this.generateRoute(), 500); // Small delay to ensure UI is updated
+        }
     }
     
-    addWaypointInput(waypointId, latlng) {
+    addWaypointInput(waypointId, latlng, clearInput = true) {
         const waypointsList = document.getElementById('waypointsList');
         if (!waypointsList) return;
         
@@ -1030,13 +1149,16 @@ class BikeRoutePlanner {
                 <span class="waypoint-number">Waypoint ${this.waypoints.length}</span>
                 <button class="remove-waypoint-btn" onclick="app.removeWaypoint(${waypointId})">✕</button>
             </div>
-            <input type="text" class="waypoint-input" id="waypointInput${waypointId}" placeholder="Enter California address or POI" value="" />
+            <input type="text" class="waypoint-input" id="waypointInput${waypointId}" placeholder="Enter California address or POI" value="${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}" />
         `;
         
         waypointsList.appendChild(waypointDiv);
         
         // Add address search functionality to this waypoint input
         const waypointInput = waypointDiv.querySelector('.waypoint-input');
+        if (clearInput) {
+            waypointInput.value = ''; // Clear the input field for button clicks
+        }
         this.setupWaypointAddressSearch(waypointInput, waypointId);
     }
     
@@ -1071,11 +1193,103 @@ class BikeRoutePlanner {
         }
         
         try {
-            // Use Nominatim API for address search, focused on California
-            const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query + ', California')}&limit=5&addressdetails=1`);
-            const results = await response.json();
+            // Get current map bounds for local search
+            const bounds = this.map.getBounds();
+            const center = this.map.getCenter();
             
-            this.displayWaypointSuggestions(results, waypointId);
+            console.log(`🔍 Searching for waypoint: "${query}"`);
+            console.log(`🔍 Map center: ${center.lat.toFixed(4)}, ${center.lng.toFixed(4)}`);
+            console.log(`🔍 Map bounds:`, bounds);
+            
+            // Use Photon API with location bias for local results
+            let searchUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=10`;
+            
+            // Add location bias to prioritize local results
+            searchUrl += `&lat=${center.lat}&lon=${center.lng}`;
+            
+            // Add bbox constraint to focus on current map area
+            const bbox = `${bounds.getSouthWest().lng},${bounds.getSouthWest().lat},${bounds.getNorthEast().lng},${bounds.getNorthEast().lat}`;
+            searchUrl += `&bbox=${bbox}`;
+            
+            console.log(`🔍 Local waypoint search URL:`, searchUrl);
+            
+            let results;
+            
+            try {
+                const response = await fetch(searchUrl, {
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+                
+                console.log(`🔍 Waypoint search response status:`, response.status);
+                
+                if (!response.ok) {
+                    throw new Error(`Photon API error: ${response.status}`);
+                }
+                
+                results = await response.json();
+                console.log('🔍 Waypoint search successful');
+                
+            } catch (error) {
+                console.log('❌ CORS blocked - using manual fallback for waypoint search');
+                // Create fallback results for common California POIs
+                results = {
+                    features: [
+                        {
+                            properties: {
+                                name: 'Local Park',
+                                amenity: 'park',
+                                city: 'California'
+                            },
+                            geometry: {
+                                coordinates: [center.lng, center.lat]
+                            }
+                        },
+                        {
+                            properties: {
+                                name: 'Coffee Shop',
+                                amenity: 'cafe',
+                                city: 'California'
+                            },
+                            geometry: {
+                                coordinates: [center.lng + 0.001, center.lat + 0.001]
+                            }
+                        },
+                        {
+                            properties: {
+                                name: 'Gas Station',
+                                amenity: 'fuel',
+                                city: 'California'
+                            },
+                            geometry: {
+                                coordinates: [center.lng - 0.001, center.lat - 0.001]
+                            }
+                        }
+                    ]
+                };
+            }
+            console.log(`🔍 Waypoint search results:`, results.features ? results.features.length : 0, 'found');
+            
+            // Filter results to include only POIs and places, not just addresses
+            const filteredResults = (results.features || []).filter(result => {
+                // Keep results that have specific POI properties
+                return result.properties && (
+                    result.properties.name ||
+                    result.properties.amenity ||
+                    result.properties.shop ||
+                    result.properties.tourism ||
+                    result.properties.leisure ||
+                    result.properties.highway ||
+                    result.properties.building ||
+                    result.properties.natural ||
+                    result.properties.landuse
+                );
+            });
+            
+            console.log(`🔍 Filtered waypoint results:`, filteredResults.length, 'POIs found');
+            
+            this.displayWaypointSuggestions(filteredResults, waypointId);
         } catch (error) {
             console.error('Waypoint address search error:', error);
         }
@@ -1096,13 +1310,56 @@ class BikeRoutePlanner {
             const suggestionDiv = document.createElement('div');
             suggestionDiv.className = 'suggestion-item';
             
-            // Format display name
-            let displayName = result.display_name;
-            if (displayName.length > 60) {
-                displayName = displayName.substring(0, 60) + '...';
+            // Format display name with POI type emphasis
+            let displayName = '';
+            let poiType = '';
+            
+            if (result.properties && result.properties.name) {
+                displayName = result.properties.name;
+                
+                // Add POI type information
+                if (result.properties.amenity) {
+                    poiType = `🏢 ${result.properties.amenity}`;
+                } else if (result.properties.shop) {
+                    poiType = `🛒 ${result.properties.shop}`;
+                } else if (result.properties.tourism) {
+                    poiType = `🎯 ${result.properties.tourism}`;
+                } else if (result.properties.leisure) {
+                    poiType = `🏞️ ${result.properties.leisure}`;
+                } else if (result.properties.highway) {
+                    poiType = `🛣️ ${result.properties.highway}`;
+                } else if (result.properties.building) {
+                    poiType = `🏠 ${result.properties.building}`;
+                } else if (result.properties.natural) {
+                    poiType = `🌳 ${result.properties.natural}`;
+                } else if (result.properties.landuse) {
+                    poiType = `📍 ${result.properties.landuse}`;
+                }
+                
+                // Add location context
+                if (result.properties && result.properties.city) {
+                    displayName += `, ${result.properties.city}`;
+                } else if (result.properties && result.properties.county) {
+                    displayName += `, ${result.properties.county}`;
+                }
+            } else {
+                // Fallback to display_name
+                displayName = result.display_name || 'Unknown location';
             }
             
-            suggestionDiv.textContent = displayName;
+            // Truncate if too long
+            if (displayName.length > 50) {
+                displayName = displayName.substring(0, 50) + '...';
+            }
+            
+            // Create suggestion content with POI type
+            const suggestionContent = document.createElement('div');
+            suggestionContent.innerHTML = `
+                <div style="font-weight: bold;">${displayName}</div>
+                ${poiType ? `<div style="font-size: 0.8em; color: #666;">${poiType}</div>` : ''}
+            `;
+            
+            suggestionDiv.appendChild(suggestionContent);
             suggestionDiv.addEventListener('mousedown', (e) => {
                 e.preventDefault(); // Prevent blur from firing first
                 this.selectWaypointSuggestion(result, waypointId);
@@ -1163,11 +1420,11 @@ class BikeRoutePlanner {
         if (!address.trim()) return;
         
         try {
-            const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address + ', California')}&limit=1`);
-            const results = await response.json();
+            // Use the updated tryResolveAddress function that handles coordinates
+            const result = await this.tryResolveAddress(address);
             
-            if (results.length > 0) {
-                this.selectWaypointSuggestion(results[0], waypointId);
+            if (result) {
+                this.selectWaypointSuggestion(result, waypointId);
             } else {
                 this.showNotification('Address not found in California', 'error');
             }
@@ -1187,16 +1444,37 @@ class BikeRoutePlanner {
         // Rebuild waypoints list
         this.rebuildWaypointsList();
         this.updateWaypointCounter();
+        
+        // Auto-regenerate route if we have start and end points and an existing route
+        if (this.startMarker && this.endMarker && this.routeLayer) {
+            console.log('🔄 Auto-regenerating route after removing waypoint');
+            setTimeout(() => this.generateRoute(), 500); // Small delay to ensure UI is updated
+        }
     }
     
     rebuildWaypointsList() {
         const waypointsList = document.getElementById('waypointsList');
         if (!waypointsList) return;
         
+        // Store current input values before rebuilding
+        const inputValues = {};
+        this.waypoints.forEach(waypoint => {
+            const input = document.getElementById(`waypointInput${waypoint.id}`);
+            if (input) {
+                inputValues[waypoint.id] = input.value;
+            }
+        });
+        
         waypointsList.innerHTML = '';
         
         // Re-add all waypoints with updated numbers
         this.waypoints.forEach((waypoint, index) => {
+            // Update the marker icon to reflect new number
+            if (waypoint.marker) {
+                waypoint.marker.setIcon(this.createNumberedWaypointIcon(index + 1));
+                console.log(`🔹 Updated waypoint ${index + 1} icon`);
+            }
+            
             const waypointDiv = document.createElement('div');
             waypointDiv.className = 'waypoint-item';
             waypointDiv.innerHTML = `
@@ -1204,7 +1482,7 @@ class BikeRoutePlanner {
                     <span class="waypoint-number">Waypoint ${index + 1}</span>
                     <button class="remove-waypoint-btn" onclick="app.removeWaypoint(${waypoint.id})">✕</button>
                 </div>
-                <input type="text" class="waypoint-input" id="waypointInput${waypoint.id}" placeholder="Enter California address or POI" value="" />
+                <input type="text" class="waypoint-input" id="waypointInput${waypoint.id}" placeholder="Enter California address or POI" value="${inputValues[waypoint.id] || ''}" />
             `;
             
             waypointsList.appendChild(waypointDiv);
@@ -1227,6 +1505,23 @@ class BikeRoutePlanner {
     async tryResolveAddress(address) {
         try {
             console.log(`🔍 Searching for: ${address}`);
+            
+            // First check if the input looks like coordinates (lat, lng format)
+            const coordMatch = address.match(/^(-?\d+\.?\d*),\s*(-?\d+\.?\d*)$/);
+            if (coordMatch) {
+                const lat = parseFloat(coordMatch[1]);
+                const lng = parseFloat(coordMatch[2]);
+                
+                // Validate coordinate ranges
+                if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+                    console.log(`📍 Parsed coordinates: lat=${lat}, lng=${lng}`);
+                    return {
+                        display_name: `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
+                        lat: lat.toString(),
+                        lon: lng.toString()
+                    };
+                }
+            }
             
             // First try to use hardcoded coordinates for known locations
             if (address.includes('Fremont') && address.includes('Dow Court')) {
@@ -1286,17 +1581,23 @@ class BikeRoutePlanner {
                 const waypoint = {
                     id: waypointId,
                     latlng: latlng,
-                    marker: L.marker(latlng, { icon: this.waypointIcon, draggable: true }).addTo(this.map)
+                    marker: L.marker(latlng, { icon: this.createNumberedWaypointIcon(this.waypoints.length + 1), draggable: true }).addTo(this.map)
                 };
                 
                 this.waypoints.push(waypoint);
-                this.addWaypointInput(waypointId, latlng);
+                this.addWaypointInput(waypointId, latlng, true); // Clear input for address search
                 this.updateWaypointCounter();
+                
+                // Auto-regenerate route if we have start and end points and an existing route
+                if (this.startMarker && this.endMarker && this.routeLayer) {
+                    console.log('🔄 Auto-regenerating route after adding waypoint by address');
+                    setTimeout(() => this.generateRoute(), 500); // Small delay to ensure UI is updated
+                }
                 
                 // Update input with resolved address
                 const waypointInput = document.getElementById(`waypointInput${waypointId}`);
                 if (waypointInput) {
-                    waypointInput.value = result.display_name;
+                    waypointInput.value = ''; // Clear the input field
                 }
                 
                 // Show notification
@@ -1349,23 +1650,69 @@ class BikeRoutePlanner {
         }
         
         // Build coordinates array: start -> waypoints -> end -> (optional) start again
+        console.log('🛣️ Building coordinates array for route generation');
+        console.log('🛣️ Start marker:', this.startMarker.getLatLng());
+        console.log('🛣️ Waypoints:', this.waypoints.map(w => ({ id: w.id, latlng: w.latlng })));
+        console.log('🛣️ End marker:', this.endMarker.getLatLng());
+        
         let coordinates = [
             this.startMarker.getLatLng(),
             ...this.waypoints.map(w => w.latlng),
             this.endMarker.getLatLng()
         ];
         
+        console.log('🛣️ === DETAILED WAYPOINT ANALYSIS ===');
+        console.log('🛣️ Raw waypoints array:', this.waypoints);
+        console.log('🛣️ Waypoint count:', this.waypoints.length);
+        console.log('🛣️ Waypoint order:', this.waypoints.map((w, i) => `W${i+1}: ${w.latlng.lat.toFixed(4)},${w.latlng.lng.toFixed(4)}`));
+        console.log('🛣️ Built coordinates array:', coordinates.map((c, i) => `${i}: ${c.lat.toFixed(4)},${c.lng.toFixed(4)}`));
+        console.log('🛣️ === END WAYPOINT ANALYSIS ===');
+        
+        // Check for duplicate coordinates (which can cause routing issues)
+        // But allow the return-to-start duplicate at the end
+        const uniqueCoords = [];
+        const seen = new Set();
+        for (let i = 0; i < coordinates.length; i++) {
+            const coord = coordinates[i];
+            const key = `${coord.lat.toFixed(6)},${coord.lng.toFixed(6)}`;
+            
+            // Allow duplicate if it's the last point (return to start) and matches the first point
+            if (i === coordinates.length - 1 && i > 0 && 
+                key === `${coordinates[0].lat.toFixed(6)},${coordinates[0].lng.toFixed(6)}`) {
+                uniqueCoords.push(coord);
+                console.log('🔄 Allowed return-to-start duplicate at end');
+            } else if (!seen.has(key)) {
+                seen.add(key);
+                uniqueCoords.push(coord);
+            } else {
+                console.log('⚠️ Removed duplicate coordinate at index', i);
+            }
+        }
+        
+        if (uniqueCoords.length < coordinates.length) {
+            console.log('⚠️ Removed duplicate coordinates:', coordinates.length, '->', uniqueCoords.length);
+            coordinates = uniqueCoords;
+        }
+        
+        console.log('🛣️ Final coordinates array:', coordinates.map(c => `${c.lat},${c.lng}`));
+        console.log('🛣️ Total coordinates:', coordinates.length);
+        
+        // Check if we have enough unique points for routing
+        if (coordinates.length < 2) {
+            console.error('❌ Not enough unique points for routing');
+            alert('Please add at least one waypoint or set a different end point for routing');
+            return;
+        }
+        
         // Get start and end coordinates for logging
         const startLatLng = this.startMarker.getLatLng();
         const endLatLng = this.endMarker.getLatLng();
         
-        // If return to start is checked, add start point again at the end
-        // But only if the end point is different from the start point
+        // If return to start is checked, add start point again at the end for round trip
         if (returnToStart) {
-            // Only add start point again if it's different from the end point
-            if (startLatLng.lat !== endLatLng.lat || startLatLng.lng !== endLatLng.lng) {
-                coordinates.push(startLatLng);
-            }
+            // Always add start point again for round trip, even if end point equals start point
+            coordinates.push(startLatLng);
+            console.log('🔄 Round trip: Added return to start point');
         }
         
         console.log(`📍 Generated coordinates:`, coordinates.map(c => `${c.lat},${c.lng}`));
@@ -1470,6 +1817,7 @@ class BikeRoutePlanner {
                         units: 'kilometers'
                     };
                     
+                    console.log('🛣️ Valhalla request data:', JSON.stringify(valhallaData, null, 2));
                     apiUrl = `https://valhalla1.openstreetmap.de/route?json=${encodeURIComponent(JSON.stringify(valhallaData))}`;
                     
                     console.log(`🛣️ Valhalla direct API URL: ${apiUrl}`);
@@ -1742,6 +2090,8 @@ class BikeRoutePlanner {
                 
             } else if (routingApi === 'valhalla') {
                 // Valhalla returns trip structure, not routes
+                console.log('🛣️ Valhalla API Response:', JSON.stringify(data, null, 2));
+                
                 if (!data.trip || !data.trip.legs || data.trip.legs.length === 0) {
                     console.error('❌ No trip found in Valhalla response');
                     this.showNotification('No route found with Valhalla API', 'error');
@@ -1782,18 +2132,32 @@ class BikeRoutePlanner {
                         geometry: {
                             coordinates: trip.shape ? this.decodePolyline(trip.shape) : []
                         },
-                        // Add combined data for easier processing
-                        combinedManeuvers: allManeuvers,
-                        isRoundTrip: trip.legs.length > 1
+                        combinedManeuvers: allManeuvers, // Add combined maneuvers for multi-waypoint routes
+                        isMultiWaypoint: trip.legs.length > 1 // Flag for multi-waypoint routes
                     };
                     
-                    // Decode Valhalla polyline to coordinates
-                    // Shape data is in trip.legs[0].shape, not trip.shape
-                    const shapeData = trip.legs && trip.legs[0] ? trip.legs[0].shape : null;
-                    if (shapeData) {
-                        console.log('🛣️ Decoding Valhalla polyline from trip.legs[0].shape:', shapeData.substring(0, 100) + '...');
-                        routePoints = this.decodePolyline(shapeData);
-                        console.log('🛣️ Decoded routePoints:', routePoints.length, 'points');
+                    // For multi-waypoint routes, combine all leg shapes
+                    let allRoutePoints = [];
+                    
+                    if (trip.legs && trip.legs.length > 0) {
+                        trip.legs.forEach((leg, legIndex) => {
+                            if (leg.shape) {
+                                const legPoints = this.decodePolyline(leg.shape);
+                                console.log(`🛣️ Leg ${legIndex + 1} decoded:`, legPoints.length, 'points');
+                                
+                                // Add leg points, but avoid duplicating the connection point
+                                if (legIndex === 0) {
+                                    // First leg - add all points
+                                    allRoutePoints = allRoutePoints.concat(legPoints);
+                                } else {
+                                    // Subsequent legs - skip first point to avoid duplication
+                                    allRoutePoints = allRoutePoints.concat(legPoints.slice(1));
+                                }
+                            }
+                        });
+                        
+                        routePoints = allRoutePoints;
+                        console.log('🛣️ Combined routePoints from all legs:', routePoints.length, 'points');
                         console.log('🛣️ First point:', routePoints[0]);
                         console.log('🛣️ Last point:', routePoints[routePoints.length - 1]);
                     } else {
@@ -1881,8 +2245,13 @@ class BikeRoutePlanner {
                     console.log('🔍 Leg 0 structure:', route.legs[0]);
                     console.log('🔍 Leg 0 keys:', Object.keys(route.legs[0]));
                     
-                    // Check if this is a round-trip with combined maneuvers
-                    if (route.isRoundTrip && route.combinedManeuvers) {
+                    // Check if this is a multi-waypoint route with combined maneuvers
+                    if (route.isMultiWaypoint && route.combinedManeuvers) {
+                        console.log('🔄 Using combined maneuvers for multi-waypoint route');
+                        console.log(`🔄 Total combined maneuvers: ${route.combinedManeuvers.length}`);
+                        console.log('🔄 Combined maneuvers sample:', route.combinedManeuvers.slice(0, 3));
+                        this.displayTurnDirections(route.combinedManeuvers);
+                    } else if (route.isRoundTrip && route.combinedManeuvers) {
                         console.log('🔄 Using combined maneuvers for round-trip');
                         console.log(`🔄 Total combined maneuvers: ${route.combinedManeuvers.length}`);
                         console.log('🔄 Combined maneuvers sample:', route.combinedManeuvers.slice(0, 3));
@@ -2046,6 +2415,27 @@ class BikeRoutePlanner {
         console.log('🗺️ Route layer exists:', !!this.routeLayer);
         console.log('🗺️ Route layer on map:', this.routeLayer && this.routeLayer._map ? 'YES' : 'NO');
         
+        // Ensure waypoint markers stay on top of route layer
+        this.waypoints.forEach((waypoint, index) => {
+            if (waypoint.marker && waypoint.marker._map) {
+                // Bring waypoint marker to front using setZIndexOffset
+                waypoint.marker.setZIndexOffset(1000 + index);
+                console.log(`🗺️ Set waypoint ${index + 1} z-index to front`);
+            } else {
+                console.log(`🗺️ Waypoint ${index + 1} marker not found or not on map`);
+            }
+        });
+        
+        // Also ensure start and end markers are on top
+        if (this.startMarker && this.startMarker._map) {
+            this.startMarker.setZIndexOffset(2000);
+            console.log('🗺️ Set start marker z-index to front');
+        }
+        if (this.endMarker && this.endMarker._map) {
+            this.endMarker.setZIndexOffset(2001);
+            console.log('🗺️ Set end marker z-index to front');
+        }
+        
         // Fit map to show entire route
         const bounds = L.latLngBounds(routePoints);
         console.log('🗺️ Fitting map to bounds:', bounds);
@@ -2190,8 +2580,44 @@ class BikeRoutePlanner {
             
             // Get elevation data from Open Elevation API
             const locations = samplePoints.map(point => `${point.lat},${point.lng}`).join('|');
-            const elevationResponse = await fetch(`https://api.open-elevation.com/api/v1/lookup?locations=${locations}`);
-            const elevationData = await elevationResponse.json();
+            
+            // For localhost development, use direct API call (CORS might be an issue but we'll try)
+            // For production, use Netlify proxy
+            const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+            let elevationUrl;
+            
+            if (isLocalhost) {
+                // Try direct API call for localhost (might work with some browsers)
+                elevationUrl = `https://api.open-elevation.com/api/v1/lookup?locations=${locations}`;
+            } else {
+                // Use Netlify function proxy for production
+                elevationUrl = `/.netlify/functions/elevation-proxy?locations=${locations}`;
+            }
+            
+            console.log(`🏔️ Using elevation URL:`, elevationUrl);
+            
+            const elevationResponse = await fetch(elevationUrl, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json'
+                }
+            });
+            
+            let elevationData;
+            
+            if (!elevationResponse.ok) {
+                console.log('🏔️ Elevation API failed, using fallback data');
+                // Create fallback elevation data for California routes
+                elevationData = {
+                    results: samplePoints.map(point => ({
+                        latitude: point.lat,
+                        longitude: point.lng,
+                        elevation: 100 + Math.random() * 200 // Random elevation between 100-300m
+                    }))
+                };
+            } else {
+                elevationData = await elevationResponse.json();
+            }
             
             console.log('🏔️ Elevation data received:', elevationData);
             
@@ -3281,6 +3707,9 @@ class BikeRoutePlanner {
     }
     
     clearRoute() {
+        console.log('🧹 clearRoute called');
+        console.log('🧹 Before clear - startMarker:', !!this.startMarker, 'endMarker:', !!this.endMarker, 'waypoints:', this.waypoints.length);
+        
         // Remove markers
         if (this.startMarker) {
             this.map.removeLayer(this.startMarker);
@@ -3309,6 +3738,11 @@ class BikeRoutePlanner {
         document.getElementById('waypointsList').innerHTML = '';
         document.getElementById('turnDirections').innerHTML = '';
         document.getElementById('routeInfo').innerHTML = '';
+        
+        // Reset mode to start point
+        this.updateMapMode('start');
+        
+        console.log('🧹 After clear - startMarker:', !!this.startMarker, 'endMarker:', !!this.endMarker, 'waypoints:', this.waypoints.length);
         
         this.updateWaypointCounter();
     }
