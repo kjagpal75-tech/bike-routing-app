@@ -34,6 +34,9 @@
                             <label>Waypoints</label>
                             <span id="waypointCounter" class="waypoint-counter">Waypoints: 0</span>
                         </div>
+                        <div class="map-mode-indicator">
+                            <span id="mapModeText" class="mode-text">📍 Click map to set start point</span>
+                        </div>
                         <button id="addWaypointBtn" class="add-waypoint-btn">+ Add Waypoint</button>
                         <div id="waypointsList" class="waypoints-list"></div>
                     </div>
@@ -88,6 +91,10 @@
                     <div class="action-buttons">
                         <button id="generateRouteBtn" class="generate-btn">🚴 Generate Route</button>
                         <button id="clearRouteBtn" class="clear-btn">🗑️ Clear Route</button>
+                        <div class="export-buttons" id="exportButtons" style="display: none;">
+                            <button id="exportGPXBtn" class="export-btn">📁 Export GPX</button>
+                            <button id="exportGarminBtn" class="export-btn">🚴 Export to Garmin</button>
+                        </div>
                     </div>
                 </div>
                 

@@ -550,6 +550,18 @@ class BikeRoutePlanner {
             clearRouteBtn.addEventListener('click', () => this.clearRoute());
         }
         
+        // Export GPX button
+        const exportGPXBtn = document.getElementById('exportGPXBtn');
+        if (exportGPXBtn) {
+            exportGPXBtn.addEventListener('click', () => this.exportGPX());
+        }
+        
+        // Export to Garmin button
+        const exportGarminBtn = document.getElementById('exportGarminBtn');
+        if (exportGarminBtn) {
+            exportGarminBtn.addEventListener('click', () => this.exportToGarmin());
+        }
+        
         // Add waypoint button
         const addWaypointBtn = document.getElementById('addWaypointBtn');
         if (addWaypointBtn) {
@@ -2476,7 +2488,7 @@ class BikeRoutePlanner {
                 console.log('🗺️ Map bounds fitted successfully (manual)');
                 window.updateDebugPanel('MAP_RENDER', 'SUCCESS_MANUAL');
             } catch (error) {
-                console.error('🗺️ Error fitting bounds:', error);
+                console.error('🗺️ Error fitting manual bounds:', error);
                 window.updateDebugPanel('MAP_ERROR', 'BOUNDS_ERROR_MANUAL');
             }
         }
@@ -2485,6 +2497,12 @@ class BikeRoutePlanner {
         const routeInfoDiv = document.getElementById('routeInfo');
         if (routeInfoDiv) {
             routeInfoDiv.style.display = 'block';
+        }
+        
+        // Show export buttons when route is generated
+        const exportButtonsDiv = document.getElementById('exportButtons');
+        if (exportButtonsDiv) {
+            exportButtonsDiv.style.display = 'flex';
         }
         
         // Show turn directions panel
@@ -2581,17 +2599,15 @@ class BikeRoutePlanner {
             // Get elevation data from Open Elevation API
             const locations = samplePoints.map(point => `${point.lat},${point.lng}`).join('|');
             
-            // For localhost development, use direct API call (CORS might be an issue but we'll try)
-            // For production, use Netlify proxy
+            // Check if running on localhost vs production
             const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-            let elevationUrl;
             
             if (isLocalhost) {
-                // Try direct API call for localhost (might work with some browsers)
+                // Use direct API call for localhost development
                 elevationUrl = `https://api.open-elevation.com/api/v1/lookup?locations=${locations}`;
             } else {
-                // Use Netlify function proxy for production
-                elevationUrl = `/.netlify/functions/elevation-proxy?locations=${locations}`;
+                // Use Cloudflare function proxy for production
+                elevationUrl = `/api/elevation-proxy?locations=${locations}`;
             }
             
             console.log(`🏔️ Using elevation URL:`, elevationUrl);
@@ -3739,11 +3755,223 @@ class BikeRoutePlanner {
         document.getElementById('turnDirections').innerHTML = '';
         document.getElementById('routeInfo').innerHTML = '';
         
+        // Hide export buttons when route is cleared
+        const exportButtonsDiv = document.getElementById('exportButtons');
+        if (exportButtonsDiv) {
+            exportButtonsDiv.style.display = 'none';
+        }
+        
         // Reset mode to start point
         this.updateMapMode('start');
         
         console.log('🧹 After clear - startMarker:', !!this.startMarker, 'endMarker:', !!this.endMarker, 'waypoints:', this.waypoints.length);
         
         this.updateWaypointCounter();
+    }
+    
+    // GPX Export Functions
+    exportGPX() {
+        if (!this.currentRouteData || !this.routeLayer) {
+            this.showNotification('No route to export. Please generate a route first.', 'error');
+            return;
+        }
+        
+        console.log('📁 Exporting route to GPX format...');
+        
+        try {
+            const gpxContent = this.generateGPXContent();
+            const blob = new Blob([gpxContent], { type: 'application/gpx+xml' });
+            const url = URL.createObjectURL(blob);
+            
+            // Create download link
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = this.generateGPXFilename();
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            
+            this.showNotification('GPX file exported successfully!', 'success');
+            console.log('✅ GPX export completed');
+            
+        } catch (error) {
+            console.error('❌ GPX export error:', error);
+            this.showNotification('Failed to export GPX file', 'error');
+        }
+    }
+    
+    exportToGarmin() {
+        if (!this.currentRouteData || !this.routeLayer) {
+            this.showNotification('No route to export. Please generate a route first.', 'error');
+            return;
+        }
+        
+        console.log('🚴 Exporting route for Garmin Connect...');
+        
+        try {
+            const gpxContent = this.generateGPXContent();
+            const blob = new Blob([gpxContent], { type: 'application/gpx+xml' });
+            const url = URL.createObjectURL(blob);
+            
+            // Create download link with Garmin-specific filename
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = this.generateGarminFilename();
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            
+            // Show Garmin Connect instructions
+            this.showGarminInstructions();
+            
+        } catch (error) {
+            console.error('❌ Garmin export error:', error);
+            this.showNotification('Failed to export for Garmin Connect', 'error');
+        }
+    }
+    
+    generateGPXContent() {
+        const now = new Date().toISOString();
+        const routeName = this.generateRouteName();
+        const routePoints = this.getCurrentRoutePoints();
+        
+        // Get route metadata
+        const distance = this.currentRouteData.distance || 0;
+        const duration = this.currentRouteData.duration || 0;
+        
+        let gpx = `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="Bike Route Planner" xmlns="http://www.topografix.com/GPX/1/1">
+    <metadata>
+        <name>${routeName}</name>
+        <desc>Bike route generated on ${new Date().toLocaleDateString()}</desc>
+        <time>${now}</time>
+        <extensions>
+            <distance>${distance}</distance>
+            <duration>${duration}</duration>
+        </extensions>
+    </metadata>
+    
+    <trk>
+        <name>${routeName}</name>
+        <desc>Bike route - ${this.formatDistance(distance)} - ${this.formatDuration(duration)}</desc>
+        <type>cycling</type>
+        
+        <trkseg>`;
+        
+        // Add route points
+        routePoints.forEach((point, index) => {
+            const lat = typeof point.lat === 'number' ? point.lat : point.latlng.lat;
+            const lng = typeof point.lng === 'number' ? point.lng : point.latlng.lng;
+            const ele = point.elevation || 100; // Default elevation if not available
+            
+            gpx += `
+            <trkpt lat="${lat}" lon="${lng}">
+                <ele>${ele}</ele>
+                <name>Point ${index + 1}</name>
+                <time>${now}</time>
+            </trkpt>`;
+        });
+        
+        gpx += `
+        </trkseg>
+    </trk>`;
+        
+        // Add waypoints as POIs
+        if (this.waypoints.length > 0) {
+            this.waypoints.forEach((waypoint, index) => {
+                const lat = waypoint.latlng.lat;
+                const lng = waypoint.latlng.lng;
+                
+                gpx += `
+    <wpt lat="${lat}" lon="${lng}">
+        <name>Waypoint ${index + 1}</name>
+        <sym>Waypoint</sym>
+        <type>Waypoint</type>
+    </wpt>`;
+            });
+        }
+        
+        gpx += `
+</gpx>`;
+        
+        return gpx;
+    }
+    
+    getCurrentRoutePoints() {
+        // Extract route points from the current route layer
+        if (!this.routeLayer) return [];
+        
+        const latlngs = this.routeLayer.getLatLngs();
+        return latlngs.map(latlng => ({
+            lat: latlng.lat,
+            lng: latlng.lng,
+            elevation: 100 // Default elevation
+        }));
+    }
+    
+    generateRouteName() {
+        const date = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+        const time = new Date().toTimeString().split(' ')[0].replace(/:/g, '-'); // HH-MM-SS
+        const waypointCount = this.waypoints.length;
+        
+        if (waypointCount === 0) {
+            return `BikeRoute_${date}_${time}`;
+        } else {
+            return `BikeRoute_${waypointCount}Waypoints_${date}_${time}`;
+        }
+    }
+    
+    generateGPXFilename() {
+        return `${this.generateRouteName()}.gpx`;
+    }
+    
+    generateGarminFilename() {
+        const date = new Date().toISOString().split('T')[0];
+        return `Garmin_${this.generateRouteName()}.gpx`;
+    }
+    
+    showGarminInstructions() {
+        const instructions = `
+🚴 Garmin Connect Import Instructions:
+
+1. Save the downloaded GPX file to your computer
+2. Go to https://connect.garmin.com
+3. Sign in to your Garmin Connect account
+4. Click on "Activities" in the left menu
+5. Click the "Import" button (or drag & drop the file)
+6. Select the downloaded GPX file
+7. The route will appear in your activities
+8. You can then send it to your Garmin device
+
+💡 Tip: The route includes all waypoints and turn-by-turn data!
+        `;
+        
+        // Show instructions in a modal or alert
+        alert(instructions);
+        this.showNotification('GPX file ready for Garmin Connect!', 'success');
+    }
+    
+    formatDistance(meters) {
+        const useImperial = document.getElementById('useImperialUnits')?.checked;
+        if (useImperial) {
+            const miles = meters / 1609.34;
+            return `${miles.toFixed(1)} miles`;
+        } else {
+            const km = meters / 1000;
+            return `${km.toFixed(1)} km`;
+        }
+    }
+    
+    formatDuration(seconds) {
+        const hours = Math.floor(seconds / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        
+        if (hours > 0) {
+            return `${hours}h ${minutes}m`;
+        } else {
+            return `${minutes}m`;
+        }
     }
 }
