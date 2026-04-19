@@ -52,10 +52,28 @@ class BikeRoutePlanner {
         this.waypoints = [];
         this.routeLayer = null;
         
+        // Set build number
+        this.setBuildNumber();
+        
         this.initMap();
         this.createIcons();
         this.setupEventListeners();
         this.setupAddressSearch();
+    }
+    
+    setBuildNumber() {
+        const buildNumber = document.getElementById('buildNumber');
+        if (buildNumber) {
+            // Use timestamp for build number (YYYYMMDD-HHMM format)
+            const now = new Date();
+            const buildTimestamp = now.getFullYear().toString() +
+                (now.getMonth() + 1).toString().padStart(2, '0') +
+                now.getDate().toString().padStart(2, '0') + '-' +
+                now.getHours().toString().padStart(2, '0') +
+                now.getMinutes().toString().padStart(2, '0');
+            buildNumber.textContent = buildTimestamp;
+            console.log('🏗️ Build number set:', buildTimestamp);
+        }
     }
     
     initMap() {
@@ -92,10 +110,20 @@ class BikeRoutePlanner {
             attribution: '© OpenStreetMap contributors'
         }).addTo(this.map);
         
-        console.log('🗺️ Map initialized successfully');
+        console.log('?? Map initialized successfully');
         
         // Add click handler to map
         this.map.on('click', (e) => this.handleMapClick(e));
+        
+        // Add window resize handler to force map to resize
+        window.addEventListener('resize', () => {
+            if (this.map) {
+                setTimeout(() => {
+                    this.map.invalidateSize();
+                    console.log('?? Map size invalidated due to window resize');
+                }, 100);
+            }
+        });
     }
     
     // Unit conversion functions
@@ -2396,6 +2424,9 @@ class BikeRoutePlanner {
         console.log('🗺️ displayRoute called with', routePoints.length, 'points');
         console.log('🗺️ Map object exists:', !!this.map);
         
+        // Store route points for elevation hover marker
+        this.currentRoutePoints = routePoints;
+        
         // Update debug panel
         window.updateDebugPanel('MAP_RENDER', 'STARTING');
         
@@ -2721,12 +2752,22 @@ class BikeRoutePlanner {
                 // Calculate gradient statistics
                 const gradientStats = this.calculateGradientStatistics(elevationData.results, routePoints);
                 
+                // Calculate median elevation
+                const sortedElevations = [...elevations].sort((a, b) => a - b);
+                let medianElevation;
+                if (sortedElevations.length % 2 === 0) {
+                    medianElevation = (sortedElevations[sortedElevations.length / 2 - 1] + sortedElevations[sortedElevations.length / 2]) / 2;
+                } else {
+                    medianElevation = sortedElevations[Math.floor(sortedElevations.length / 2)];
+                }
+                
                 // Store current elevation data for unit conversion - use same elevations as chart
                 this.currentElevationData = {
                     gain: elevationGain,
                     loss: elevationLoss,
                     peak: peakElevation,
                     min: minElevation,
+                    median: medianElevation,
                     medianGrade: gradientStats.medianGrade,
                     maxGrade: gradientStats.maxGrade,
                     minGrade: gradientStats.minGrade,
@@ -2801,11 +2842,8 @@ class BikeRoutePlanner {
         const peakElevation = Math.max(...elevations);
         const minElevation = Math.min(...elevations);
         
-        // Create elevation chart
+        // Create elevation chart (includes stats)
         this.createElevationChart(cumulativeDistances, elevations, elevationGain, elevationLoss, peakElevation, minElevation);
-        
-        // Display elevation statistics
-        this.displayElevationStats(elevationGain, elevationLoss, peakElevation, minElevation, routeData);
         
         console.log(`🏔️ Elevation stats - Gain: ${elevationGain.toFixed(0)}m, Loss: ${elevationLoss.toFixed(0)}m, Peak: ${peakElevation.toFixed(0)}m`);
     }
@@ -2858,6 +2896,17 @@ class BikeRoutePlanner {
         
         elevationDiv.innerHTML = `
             <h3>🏔️ Elevation Profile</h3>
+            <div class="elevation-chart-container">
+                <canvas id="elevationChart" width="800" height="450"></canvas>
+            </div>
+            <div class="gradient-legend">
+                <span class="legend-title">Gradient:</span>
+                <span class="legend-item false-flat">False Flat (0-3%)</span>
+                <span class="legend-item moderate">Moderate (4-6%)</span>
+                <span class="legend-item hard">Hard (7-9%)</span>
+                <span class="legend-item severe">Severe (10-15%)</span>
+                <span class="legend-item extreme">Extreme (>15%)</span>
+            </div>
             <div class="elevation-stats">
                 <div class="elevation-stat">
                     <span class="stat-label">Elevation Gain:</span>
@@ -2870,6 +2919,10 @@ class BikeRoutePlanner {
                 <div class="elevation-stat">
                     <span class="stat-label">Peak Elevation:</span>
                     <span class="stat-value">${peakText}</span>
+                </div>
+                <div class="elevation-stat">
+                    <span class="stat-label">Median Elevation:</span>
+                    <span class="stat-value">${this.convertElevation(this.currentElevationData.median)}</span>
                 </div>
                 <div class="elevation-stat">
                     <span class="stat-label">Min Elevation:</span>
@@ -2887,17 +2940,6 @@ class BikeRoutePlanner {
                     <span class="stat-label">Min Grade:</span>
                     <span class="stat-value">${this.currentElevationData.minGrade || 0}%</span>
                 </div>
-            </div>
-            <div class="elevation-chart-container">
-                <canvas id="elevationChart" width="800" height="450"></canvas>
-            </div>
-            <div class="gradient-legend">
-                <span class="legend-title">Gradient:</span>
-                <span class="legend-item false-flat">False Flat (0-3%)</span>
-                <span class="legend-item moderate">Moderate (4-6%)</span>
-                <span class="legend-item hard">Hard (7-9%)</span>
-                <span class="legend-item severe">Severe (10-15%)</span>
-                <span class="legend-item extreme">Extreme (>15%)</span>
             </div>
         `;
         
@@ -2924,28 +2966,30 @@ class BikeRoutePlanner {
     calculateGradientsForChart(elevations, cumulativeDistances) {
         const gradients = [];
         
-        // Calculate gradient using 50m run method (same as gradient statistics)
+        // Calculate gradient using actual distances between points (standard best practice)
         for (let i = 0; i < elevations.length - 1; i++) {
             const elevationChange = elevations[i + 1] - elevations[i];
+            const distanceChange = cumulativeDistances[i + 1] - cumulativeDistances[i];
             
-            // Use fixed 50m run for consistent gradient calculation
-            const fixedRun = 50; // 50 meters horizontal distance
-            
-            // Calculate gradient using rise/run × 100 formula
-            const gradient = (elevationChange / fixedRun) * 100;
-            
-            // Filter out unrealistic gradients (> 30% or < -30%)
-            if (Math.abs(gradient) <= 30) {
-                gradients.push(gradient);
-            } else {
-                console.log(`🏔️ Filtering unrealistic gradient: ${gradient}% (elevation change: ${elevationChange}m over 50m run)`);
+            // Skip if distance is too small to avoid division by zero
+            if (distanceChange < 0.1) {
+                gradients.push(0);
+                continue;
             }
+            
+            // Calculate gradient using rise/run × 100 formula with actual distance
+            const gradient = (elevationChange / distanceChange) * 100;
+            
+            gradients.push(gradient);
         }
+        
+        // Add one more gradient to match elevations array length (last point uses previous gradient)
+        gradients.push(gradients[gradients.length - 1] || 0);
         
         // Smooth gradients to eliminate noise
         const smoothedGradients = this.smoothGradients(gradients);
         
-        console.log(`🏔️ Chart gradients: ${gradients.length} calculated using 50m run method`);
+        console.log(`🏔️ Chart gradients: ${gradients.length} calculated using actual distances`);
         console.log(`🏔️ Sample chart gradients: ${gradients.slice(0, 10).map(g => g.toFixed(1)).join(', ')}%`);
         console.log(`🏔️ Smoothed gradients: ${smoothedGradients.length}`);
         
@@ -3018,7 +3062,7 @@ class BikeRoutePlanner {
         console.log('Smoothed elevations:', smoothedElevations.slice(0, 10).map(e => e.toFixed(1)).join(', '));
         
         // Set up chart dimensions
-        const padding = 40;
+        const padding = 60;
         const chartWidth = width - 2 * padding;
         const chartHeight = height - 2 * padding;
         
@@ -3096,7 +3140,7 @@ class BikeRoutePlanner {
         
         // Draw axes labels
         ctx.fillStyle = '#333';
-        ctx.font = '12px Arial';
+        ctx.font = '14px Arial';
         
         // Y-axis labels (elevation)
         ctx.textAlign = 'right';
@@ -3245,7 +3289,8 @@ class BikeRoutePlanner {
             maxElevation,
             totalDistance,
             distanceStep,
-            numGridLines
+            numGridLines,
+            routePoints: this.currentRoutePoints || [] // Store route points for map marker
         };
         
         // Add hover functionality to elevation chart canvas
@@ -3330,6 +3375,18 @@ class BikeRoutePlanner {
             document.body.appendChild(elevationCrosshairCenter);
         }
         
+        // Create map marker for elevation hover
+        if (!this.elevationHoverMarker) {
+            const hoverIcon = L.divIcon({
+                className: 'elevation-hover-marker',
+                html: '<div style="background: #FF0000; border: 2px solid white; border-radius: 50%; width: 16px; height: 16px; box-shadow: 0 2px 6px rgba(0,0,0,0.3);"></div>',
+                iconSize: [16, 16],
+                iconAnchor: [8, 8]
+            });
+            this.elevationHoverMarker = L.marker([0, 0], { icon: hoverIcon, interactive: false }).addTo(this.map);
+            this.elevationHoverMarker.setOpacity(0);
+        }
+        
         // Mouse move handler for elevation chart
         const handleElevationChartMouseMove = (event) => {
             if (!this.chartData) return;
@@ -3339,12 +3396,16 @@ class BikeRoutePlanner {
             const y = event.clientY - rect.top;
             
             // Check if mouse is within chart area
-            const { padding, chartHeight, elevations, cumulativeDistances, minElevation, maxElevation, chartWidth, totalDistance } = this.chartData;
+            const { padding, chartHeight, elevations, cumulativeDistances, minElevation, maxElevation, chartWidth, totalDistance, routePoints } = this.chartData;
             if (x < padding || x > rect.width - padding || y < padding || y > padding + chartHeight) {
                 elevationTooltip.style.display = 'none';
                 elevationCrosshairV.style.display = 'none';
                 elevationCrosshairH.style.display = 'none';
                 elevationCrosshairCenter.style.display = 'none';
+                // Hide map marker when not hovering
+                if (this.elevationHoverMarker) {
+                    this.elevationHoverMarker.setOpacity(0);
+                }
                 return;
             }
             
@@ -3352,7 +3413,12 @@ class BikeRoutePlanner {
             const mouseDistanceRatio = (x - padding) / chartWidth;
             const mouseDistance = mouseDistanceRatio * totalDistance;
             
-            // Find closest elevation point for both elevation and gradient
+            // Calculate elevation from mouse y-position to match chart scale exactly
+            const elevationRange = maxElevation - minElevation;
+            const mouseElevationRatio = 1 - (y - padding) / chartHeight;
+            const mouseElevation = minElevation + (elevationRange * mouseElevationRatio);
+            
+            // Find closest elevation point for gradient info
             let closestPointIndex = 0;
             let minDistance = Infinity;
             
@@ -3364,12 +3430,26 @@ class BikeRoutePlanner {
                 }
             }
             
-            // Use actual smoothed elevation data to match chart exactly
-            const elevation = elevations[closestPointIndex];
+            // Use chart-scale elevation (from mouse y-position) instead of data point elevation
+            const elevation = mouseElevation;
             const gradient = this.chartData.gradients ? this.chartData.gradients[closestPointIndex] : 0;
             
             // Use actual cumulative distance from closest point to match chart scale
             const actualDistance = cumulativeDistances[closestPointIndex];
+            
+            // Update map marker position to show location on route
+            if (this.elevationHoverMarker && routePoints && routePoints.length > 0) {
+                // Find the corresponding route point (scale the index to match route points)
+                const routePointIndex = Math.min(
+                    Math.floor((closestPointIndex / elevations.length) * routePoints.length),
+                    routePoints.length - 1
+                );
+                const routePoint = routePoints[routePointIndex];
+                if (routePoint) {
+                    this.elevationHoverMarker.setLatLng([routePoint.lat, routePoint.lng]);
+                    this.elevationHoverMarker.setOpacity(1);
+                }
+            }
             
             // Debug peak comparison
             const peakIndex = elevations.indexOf(Math.max(...elevations));
@@ -3389,22 +3469,10 @@ class BikeRoutePlanner {
                 nearbyElevations: elevations.slice(Math.max(0, closestPointIndex - 2), Math.min(elevations.length, closestPointIndex + 3))
             });
             
-                        
-                        
-                        
-            // Position crosshairs
-            const canvasRect = canvas.getBoundingClientRect();
-            elevationCrosshairV.style.left = `${canvasRect.left + x}px`;
-            elevationCrosshairV.style.top = `${canvasRect.top + padding}px`;
-            elevationCrosshairV.style.display = 'block';
-            
-            elevationCrosshairH.style.left = `${canvasRect.left + padding}px`;
-            elevationCrosshairH.style.top = `${canvasRect.top + y}px`;
-            elevationCrosshairH.style.display = 'block';
-            
-            elevationCrosshairCenter.style.left = `${canvasRect.left + x - 8}px`;
-            elevationCrosshairCenter.style.top = `${canvasRect.top + y - 8}px`;
-            elevationCrosshairCenter.style.display = 'block';
+            // Hide all crosshair elements
+            elevationCrosshairV.style.display = 'none';
+            elevationCrosshairH.style.display = 'none';
+            elevationCrosshairCenter.style.display = 'none';
             
             // Update tooltip
             const useImperialUnits = document.getElementById('useImperialUnits')?.checked || false;
@@ -3415,6 +3483,16 @@ class BikeRoutePlanner {
                 (actualDistance * 0.621371 / 1000).toFixed(2) + ' mi' : 
                 (actualDistance / 1000).toFixed(2) + ' km';
             const gradientText = gradient ? gradient.toFixed(1) + '%' : 'N/A';
+            
+            // Debug: Compare hover elevation with chart scale
+            console.log('HOVER DEBUG:', {
+                mouseY: y,
+                padding: padding,
+                chartHeight: chartHeight,
+                mouseElevationRatio: mouseElevationRatio,
+                hoverElevationM: elevation,
+                hoverElevationFt: Math.round(elevation * 3.28084)
+            });
             
             elevationTooltip.innerHTML = `
                 <div><strong>Elevation:</strong> ${elevationText}</div>
@@ -3478,12 +3556,24 @@ class BikeRoutePlanner {
             console.log('?? Window resized - updating elevation chart');
             // Re-draw chart with new dimensions
             if (this.chartData) {
-                const newWidth = canvas.offsetWidth;
-                const newHeight = canvas.offsetHeight;
+                const containerRect = canvas.parentElement.getBoundingClientRect();
+                const newWidth = containerRect.width - 30; // Account for padding
+                const newHeight = containerRect.height - 30; // Account for padding
+                
+                console.log('CANVAS RESIZE DEBUG:', {
+                    containerWidth: containerRect.width,
+                    containerHeight: containerRect.height,
+                    newWidth,
+                    newHeight,
+                    currentCanvasWidth: canvas.width,
+                    currentCanvasHeight: canvas.height
+                });
                 
                 if (newWidth !== canvas.width || newHeight !== canvas.height) {
                     canvas.width = newWidth;
                     canvas.height = newHeight;
+                    
+                    console.log('?? Redrawing chart with new dimensions:', newWidth, 'x', newHeight);
                     
                     // Re-draw chart with updated dimensions
                     this.drawElevationAndGradientChart(
@@ -3736,7 +3826,7 @@ class BikeRoutePlanner {
         try {
             const gradients = [];
             
-            // Calculate gradient between consecutive elevation points using 50m run
+            // Calculate gradient between consecutive elevation points using actual distances
             for (let i = 0; i < elevationData.length - 1; i++) {
                 const currentPoint = elevationData[i];
                 const nextPoint = elevationData[i + 1];
@@ -3744,18 +3834,19 @@ class BikeRoutePlanner {
                 if (currentPoint && nextPoint) {
                     const elevationChange = nextPoint.elevation - currentPoint.elevation;
                     
-                    // Use fixed 50m run for consistent gradient calculation
-                    const fixedRun = 50; // 50 meters horizontal distance
+                    // Calculate actual distance between points using Haversine formula
+                    const distance = this.calculateDistance(currentPoint.lat, currentPoint.lon, nextPoint.lat, nextPoint.lon);
                     
-                    // Calculate gradient using rise/run × 100 formula
-                    const gradient = (elevationChange / fixedRun) * 100;
-                    
-                    // Filter out unrealistic gradients (> 30% or < -30%)
-                    if (Math.abs(gradient) <= 30) {
-                        gradients.push(gradient);
-                    } else {
-                        console.log(`🏔️ Filtering unrealistic gradient: ${gradient}% (elevation change: ${elevationChange}m over 50m run)`);
+                    // Skip if distance is too small to avoid division by zero
+                    if (distance < 0.1) {
+                        gradients.push(0);
+                        continue;
                     }
+                    
+                    // Calculate gradient using rise/run × 100 formula with actual distance
+                    const gradient = (elevationChange / distance) * 100;
+                    
+                    gradients.push(gradient);
                 }
             }
             

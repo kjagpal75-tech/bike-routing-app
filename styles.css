@@ -33,6 +33,28 @@ body {
     font-weight: 600;
 }
 
+.header-content {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.build-info {
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.15);
+    padding: 4px 12px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.build-info #buildNumber {
+    font-weight: 600;
+    color: white;
+}
+
 .header-controls {
     display: flex;
     gap: 10px;
@@ -57,14 +79,19 @@ body {
     display: flex;
     flex: 1;
     overflow: hidden;
+    height: calc(100vh - 70px); /* Account for header height */
 }
 
 .sidebar {
-    width: 400px;
+    width: min(400px, 25vw); /* Dynamic width with max of 400px or 25% of viewport */
+    min-width: 300px; /* Minimum width for usability */
     background: white;
     border-right: 1px solid #e0e0e0;
     overflow-y: auto;
+    height: 100%; /* Use full height of parent */
+    max-height: calc(100vh - 70px); /* Don't exceed viewport minus header */
     padding: 20px;
+    box-sizing: border-box; /* Include padding in height calculation */
     box-shadow: 2px 0 5px rgba(0,0,0,0.1);
 }
 
@@ -73,19 +100,20 @@ body {
     display: flex;
     flex-direction: column;
     position: relative;
-    overflow-y: auto; /* Enable scrolling */
-    min-height: 0; /* Required for flex scrolling */
+    overflow: hidden; /* Prevent scrolling, use dynamic sizing */
+    min-height: 0; /* Required for flex */
+    height: 100%;
 }
 
 .map-container #map {
-    flex: 1;
-    min-height: 400px;
+    height: calc(50vh - 70px); /* Exactly 50% of viewport height minus header */
     border-radius: 12px;
     overflow: hidden;
     box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    flex-shrink: 0; /* Prevent map from shrinking */
     position: relative;
     z-index: 0;
+    margin-bottom: 15px;
+    width: 100%; /* Ensure full width */
 }
 
 /* Elevation profile below map */
@@ -93,13 +121,15 @@ body {
     background: #f9f9f9;
     border: 1px solid #e0e0e0;
     border-radius: 12px;
-    padding: 15px;
-    flex-shrink: 0;
+    padding: 15px 15px 0 15px; /* Remove bottom padding */
+    flex: 1; /* Fill remaining space */
+    min-height: 0; /* Required for flex */
     position: relative;
     z-index: 1;
-    margin-top: 10px;
-    max-height: 300px;
-    overflow-y: auto;
+    overflow-y: auto; /* Allow scrolling to see all content */
+    box-sizing: border-box; /* Include padding in height calculation */
+    display: flex;
+    flex-direction: column;
 }
 
 .map-container .elevation-chart-container {
@@ -107,22 +137,25 @@ body {
     border: 1px solid #e0e0e0;
     border-radius: 8px;
     padding: 15px;
-    height: 450px;
-    margin-bottom: 15px;
-    max-height: 600px;
-    overflow-y: auto;
-}
-
-.map-container #elevationChart {
-    width: 100%;
-    height: 100%;
+    min-height: 250px; /* Increased minimum height for better visibility */
+    margin-bottom: 0; /* Remove bottom margin */
+    overflow: visible; /* Allow chart to be fully visible */
+    box-sizing: border-box;
+    order: 1;
 }
 
 .map-container .elevation-stats {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 10px;
-    margin-bottom: 20px;
+    margin-top: 20px;
+    margin-bottom: 0; /* Remove bottom margin */
+    order: 2;
+}
+
+.map-container #elevationChart {
+    width: 100%;
+    height: 100%;
 }
 
 .map-container .elevation-stat {

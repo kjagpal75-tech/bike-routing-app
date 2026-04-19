@@ -10,8 +10,9 @@
 <body>
     <div class="app-container">
         <header class="app-header">
-            <h1>🚴 Bike Route Planner</h1>
-            <div class="header-controls">
+            <div class="header-content">
+                <h1>🚴 Bike Route Planner</h1>
+                <div class="build-info" id="buildInfo">Build: <span id="buildNumber">Loading...</span></div>
                 <button id="currentLocationBtn" class="location-btn">📍 Current Location</button>
             </div>
         </header>
@@ -93,7 +94,6 @@
                         <button id="clearRouteBtn" class="clear-btn">🗑️ Clear Route</button>
                         <div class="export-buttons" id="exportButtons" style="display: none;">
                             <button id="exportGPXBtn" class="export-btn">📁 Export GPX</button>
-                            <button id="exportGarminBtn" class="export-btn">🚴 Export to Garmin</button>
                         </div>
                     </div>
                 </div>
