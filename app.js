@@ -3979,23 +3979,10 @@ class BikeRoutePlanner {
                     
                     console.log('?? Redrawing chart with new dimensions:', newWidth, 'x', newHeight);
                     
-                    // Recalculate smoothed elevations from raw data
-                    const rawElevations = this.chartData.rawElevations || this.chartData.elevations;
-                    const smoothedElevations = this.smoothElevations(rawElevations);
-                    
-                    // Recalculate gradients from smoothed elevations to ensure proper alignment
-                    const recalculatedGradients = this.calculateGradientsForChart(
-                        smoothedElevations,
-                        this.chartData.cumulativeDistances
-                    );
-                    
-                    // Update chartData with new smoothed elevations
-                    this.chartData.elevations = smoothedElevations;
-                    
-                    // Re-draw chart with updated dimensions, smoothed elevations, and recalculated gradients
+                    // Re-draw chart with existing data (no recalculation of gradients)
                     this.drawElevationAndGradientChart(
-                        smoothedElevations,
-                        recalculatedGradients,
+                        this.chartData.elevations,
+                        this.chartData.gradients,
                         this.chartData.cumulativeDistances
                     );
                 }
