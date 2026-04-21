@@ -743,23 +743,43 @@ body {
 }
 
 .legend-item.false-flat {
-    background: #4CAF50;
+    background: #FFEBEE;
 }
 
 .legend-item.moderate {
-    background: #FF9800;
+    background: #FFCDD2;
 }
 
 .legend-item.hard {
-    background: #FF5722;
+    background: #EF9A9A;
 }
 
 .legend-item.severe {
-    background: #9C27B0;
+    background: #E57373;
 }
 
 .legend-item.extreme {
-    background: #795548;
+    background: #B71C1C;
+}
+
+.legend-item.downhill-flat {
+    background: #E8F5E9;
+}
+
+.legend-item.downhill-moderate {
+    background: #C8E6C9;
+}
+
+.legend-item.downhill-hard {
+    background: #81C784;
+}
+
+.legend-item.downhill-severe {
+    background: #4CAF50;
+}
+
+.legend-item.downhill-extreme {
+    background: #1B5E20;
 }
 
 /* Turn Directions */

@@ -763,9 +763,9 @@ class BikeRoutePlanner {
         let lng = 0;
         
         while (index < len) {
+            let b;
             let shift = 0;
             let result = 0;
-            let b;
             
             do {
                 b = encoded.charCodeAt(index++) - 63;
@@ -789,10 +789,333 @@ class BikeRoutePlanner {
             lng += dlng;
             
             points.push([lat / 1e6, lng / 1e6]);
-                    console.log(`🔢 Decoded point ${points.length}: [${(lat / 1e6).toFixed(6)}, ${(lng / 1e6).toFixed(6)}]`);
         }
         
-        return points.map(coord => L.latLng(coord[0], coord[1]));
+        return points;
+    }
+    
+    encodePolyline(points) {
+        // Encode points to Valhalla polyline format
+        let encoded = '';
+        let prevLat = 0;
+        let prevLng = 0;
+        
+        for (let i = 0; i < points.length; i++) {
+            const lat = Math.round(points[i][0] * 1e6);
+            const lng = Math.round(points[i][1] * 1e6);
+            
+            const dLat = lat - prevLat;
+            const dLng = lng - prevLng;
+            
+            encoded += this.encodeSignedNumber(dLat);
+            encoded += this.encodeSignedNumber(dLng);
+            
+            prevLat = lat;
+            prevLng = lng;
+        }
+        
+        return encoded;
+    }
+    
+    encodeSignedNumber(num) {
+        // Encode a signed number for polyline encoding
+        const sgn = num < 0 ? 1 : 0;
+        const val = (num << 1) ^ sgn;
+        
+        let encoded = '';
+        while (val >= 0x20) {
+            encoded += String.fromCharCode((0x20 | (val & 0x1f)) + 63);
+            val >>= 5;
+        }
+        encoded += String.fromCharCode(val + 63);
+        
+        return encoded;
+    }
+    
+    async getValhallaElevation(routePoints, routeData) {
+        console.log('🏔️ Getting elevation data from Valhalla...');
+        console.log('🏔️ routePoints type:', typeof routePoints);
+        console.log('🏔️ routePoints length:', routePoints?.length);
+        console.log('🏔️ routePoints sample:', routePoints?.slice(0, 3));
+        
+        // Validate routePoints
+        if (!routePoints || !Array.isArray(routePoints) || routePoints.length === 0) {
+            console.error('❌ Invalid routePoints: empty or not an array');
+            throw new Error('Invalid routePoints');
+        }
+        
+        // Check if routePoints are in correct format (LatLng objects)
+        const firstPoint = routePoints[0];
+        if (!firstPoint || typeof firstPoint.lat !== 'number' || typeof firstPoint.lng !== 'number') {
+            console.error('❌ routePoints not in LatLng format:', firstPoint);
+            throw new Error('routePoints not in LatLng format');
+        }
+        
+        try {
+            // Convert route points to format for Valhalla height API
+            const points = routePoints.map(point => [point.lat, point.lng]);
+            const encodedPolyline = this.encodePolyline(points);
+            
+            console.log(`🏔️ Encoded polyline length: ${encodedPolyline.length}`);
+            console.log(`🏔️ Number of points: ${points.length}`);
+            
+            // Call Valhalla height endpoint
+            const valhallaHeightUrl = 'https://valhalla.openstreetmap.de/height';
+            
+            const requestBody = {
+                encoded_polyline: encodedPolyline,
+                range: true
+            };
+            
+            console.log('🏔️ Requesting elevation from Valhalla height endpoint');
+            
+            const response = await fetch(valhallaHeightUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestBody)
+            });
+            
+            console.log('🏔️ Valhalla height response status:', response.status);
+            
+            if (!response.ok) {
+                console.error('🏔️ Valhalla height API failed, falling back to Open-Meteo');
+                throw new Error('Valhalla height API failed');
+            }
+            
+            const data = await response.json();
+            console.log('🏔️ Valhalla height response:', data);
+            
+            // Parse Valhalla elevation response
+            // Valhalla returns elevation in an array
+            if (!data.height || !Array.isArray(data.height)) {
+                console.error('🏔️ Invalid Valhalla elevation response format');
+                throw new Error('Invalid elevation response');
+            }
+            
+            // Convert to our expected format
+            const elevationResults = points.map((point, index) => ({
+                latitude: point[0],
+                longitude: point[1],
+                elevation: data.height[index] || 0
+            }));
+            
+            console.log(`🏔️ Got ${elevationResults.length} elevation points from Valhalla`);
+            
+            // Calculate elevation statistics
+            const elevations = elevationResults.map(result => result.elevation);
+            const elevationGain = this.calculateElevationGain(elevations);
+            const elevationLoss = this.calculateElevationLoss(elevations);
+            const peakElevation = Math.max(...elevations);
+            const minElevation = Math.min(...elevations);
+            
+            // Calculate gradient statistics
+            const gradientStats = this.calculateGradientStatistics(elevationResults, routePoints);
+            
+            // Calculate median elevation
+            const sortedElevations = [...elevations].sort((a, b) => a - b);
+            let medianElevation;
+            if (sortedElevations.length % 2 === 0) {
+                medianElevation = (sortedElevations[sortedElevations.length / 2 - 1] + sortedElevations[sortedElevations.length / 2]) / 2;
+            } else {
+                medianElevation = sortedElevations[Math.floor(sortedElevations.length / 2)];
+            }
+            
+            // Store current elevation data
+            this.currentElevationData = {
+                gain: elevationGain,
+                loss: elevationLoss,
+                peak: peakElevation,
+                min: minElevation,
+                median: medianElevation,
+                medianGrade: gradientStats.medianGrade,
+                maxGrade: gradientStats.maxGrade,
+                minGrade: gradientStats.minGrade,
+                elevations: elevations,
+                gradients: gradientStats.gradients
+            };
+            
+            console.log(`🏔️ Valhalla elevation statistics: gain=${elevationGain}m, loss=${elevationLoss}m, peak=${peakElevation}m, min=${minElevation}m`);
+            
+            // Display elevation profile
+            this.displayElevationProfile(elevationResults, routeData, routePoints, points);
+            
+            // Display elevation stats
+            this.displayElevationStats(elevationGain, elevationLoss, peakElevation, minElevation, routeData);
+            
+        } catch (error) {
+            console.error('🏔️ Valhalla elevation error:', error);
+            console.log('🏔️ Falling back to Open-Meteo elevation API');
+            
+            // Fall back to Open-Meteo
+            return await this.getOpenMeteoElevation(routePoints, routeData);
+        }
+    }
+    
+    async getOpenMeteoElevation(routePoints, routeData) {
+        console.log('🏔️ Getting elevation data from Open-Meteo (fallback)...');
+        
+        try {
+            // Sample points along the route every 50 meters
+            const samplePoints = [];
+            let currentDistance = 0;
+            
+            // Always include the first point
+            samplePoints.push(routePoints[0]);
+            
+            // Sample every 50 meters along the route
+            for (let i = 1; i < routePoints.length; i++) {
+                const prevPoint = routePoints[i - 1];
+                const currentPoint = routePoints[i];
+                
+                // Calculate distance from previous point
+                const distance = this.calculateDistance(
+                    prevPoint.lat, prevPoint.lng,
+                    currentPoint.lat, currentPoint.lng
+                );
+                
+                currentDistance += distance;
+                
+                // If we've traveled at least 50 meters, add this point
+                if (currentDistance >= 50) {
+                    samplePoints.push(currentPoint);
+                    currentDistance = 0; // Reset distance counter
+                }
+            }
+            
+            // Always include the last point to ensure we have the end elevation
+            if (samplePoints[samplePoints.length - 1] !== routePoints[routePoints.length - 1]) {
+                samplePoints.push(routePoints[routePoints.length - 1]);
+            }
+            
+            console.log(`🏔️ 50m sampling: ${samplePoints.length} points from ${routePoints.length} total route points`);
+            
+            // Get elevation data from Open Elevation API
+            const locations = samplePoints.map(point => `${point.lat},${point.lng}`).join('|');
+            
+            // Check if running on localhost vs production
+            const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+            
+            let elevationUrl;
+            if (isLocalhost) {
+                // Use direct API call for localhost development
+                elevationUrl = `https://api.open-elevation.com/api/v1/lookup?locations=${locations}`;
+            } else {
+                // Use Cloudflare function proxy for production
+                elevationUrl = `/api/elevation-proxy?locations=${locations}`;
+            }
+            
+            console.log(`🏔️ Using elevation URL:`, elevationUrl);
+            
+            const elevationResponse = await fetch(elevationUrl, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json'
+                }
+            });
+            
+            console.log('🏔️ Elevation API response status:', elevationResponse.status);
+            
+            let elevationData;
+            let responseText;
+            
+            if (!elevationResponse.ok) {
+                console.log('🏔️ Elevation API failed, using fallback data');
+                responseText = await elevationResponse.text();
+                console.log('🏔️ Error response body:', responseText);
+                // Create more realistic fallback elevation data based on California geography
+                elevationData = {
+                    results: samplePoints.map(point => {
+                        // Base elevation on latitude (rough estimate for California)
+                        let baseElevation = 50; // Bay Area base elevation
+                        
+                        // Adjust based on latitude (northern California is higher)
+                        if (point.lat > 38) {
+                            baseElevation = 200 + (point.lat - 38) * 100; // Northern California
+                        } else if (point.lat < 37) {
+                            baseElevation = 30 + (37 - point.lat) * 50; // Southern California
+                        }
+                        
+                        // Add some variation for realism
+                        const variation = (Math.sin(point.lng * 10) + Math.cos(point.lat * 10)) * 50;
+                        
+                        return {
+                            latitude: point.lat,
+                            longitude: point.lng,
+                            elevation: Math.round(baseElevation + variation)
+                        };
+                    })
+                };
+                console.log('🏔️ Using FALLBACK elevation data');
+            } else {
+                try {
+                    responseText = await elevationResponse.text();
+                    console.log('🏔️ Raw response text:', responseText);
+                    elevationData = JSON.parse(responseText);
+                    console.log('🏔️ Using REAL elevation data from API');
+                } catch (parseError) {
+                    console.error('🏔️ Failed to parse elevation response:', parseError);
+                    console.log('🏔️ Response that failed to parse:', responseText);
+                    // Use fallback data
+                    elevationData = {
+                        results: samplePoints.map(point => ({
+                            latitude: point.lat,
+                            longitude: point.lng,
+                            elevation: 100
+                        }))
+                    };
+                }
+            }
+            
+            console.log('🏔️ Elevation data received:', elevationData);
+            
+            if (elevationData.results && elevationData.results.length > 0) {
+                // Calculate elevation statistics
+                const elevations = elevationData.results.map(result => result.elevation);
+                console.log('🏔️ DEBUG: Elevations array - first=' + elevations[0] + ', last=' + elevations[elevations.length-1] + ', max=' + Math.max(...elevations) + ', length=' + elevations.length);
+                const elevationGain = this.calculateElevationGain(elevations);
+                const elevationLoss = this.calculateElevationLoss(elevations);
+                const peakElevation = Math.max(...elevations);
+                const minElevation = Math.min(...elevations);
+                
+                // Calculate gradient statistics
+                const gradientStats = this.calculateGradientStatistics(elevationData.results, routePoints);
+                
+                // Calculate median elevation
+                const sortedElevations = [...elevations].sort((a, b) => a - b);
+                let medianElevation;
+                if (sortedElevations.length % 2 === 0) {
+                    medianElevation = (sortedElevations[sortedElevations.length / 2 - 1] + sortedElevations[sortedElevations.length / 2]) / 2;
+                } else {
+                    medianElevation = sortedElevations[Math.floor(sortedElevations.length / 2)];
+                }
+                
+                // Store current elevation data for unit conversion - use same elevations as chart
+                this.currentElevationData = {
+                    gain: elevationGain,
+                    loss: elevationLoss,
+                    peak: peakElevation,
+                    min: minElevation,
+                    median: medianElevation,
+                    medianGrade: gradientStats.medianGrade,
+                    maxGrade: gradientStats.maxGrade,
+                    minGrade: gradientStats.minGrade,
+                    elevations: elevations, // Use same elevations as chart
+                    gradients: gradientStats.gradients // Add gradients array for route hover
+                };
+                
+                console.log(`🏔️ Gradient statistics: median=${gradientStats.medianGrade}%, max=${gradientStats.maxGrade}%, min=${gradientStats.minGrade}%`);
+                
+                this.displayElevationProfile(elevationData.results, routeData, routePoints, samplePoints);
+            } else {
+                console.log('❌ No elevation data available');
+                this.showElevationUnavailable();
+            }
+        } catch (error) {
+            console.error('❌ Elevation data error:', error);
+            this.showElevationUnavailable();
+        }
     }
     
     getRouteTypeDescription(routeType) {
@@ -2292,10 +2615,29 @@ class BikeRoutePlanner {
                     return;
                 }
                 
-                // Check if first point has valid coordinates
+                console.log('🛣️ routePoints type:', typeof routePoints);
+                console.log('🛣️ routePoints length:', routePoints.length);
+                console.log('🛣️ routePoints[0] type:', typeof routePoints[0]);
+                console.log('🛣️ routePoints[0]:', routePoints[0]);
+                
+                // Check if routePoints are in correct format (LatLng objects vs arrays)
                 const firstPoint = routePoints[0];
-                if (!firstPoint || typeof firstPoint.lat !== 'number' || typeof firstPoint.lng !== 'number') {
-                    console.error('❌ Invalid coordinates in routePoints:', firstPoint);
+                if (Array.isArray(firstPoint)) {
+                    console.error('❌ routePoints is array of arrays, not LatLng objects:', firstPoint);
+                    // Convert to LatLng objects if needed
+                    routePoints = routePoints.map(point => {
+                        if (Array.isArray(point) && point.length >= 2) {
+                            return L.latLng(point[0], point[1]);
+                        }
+                        return point;
+                    });
+                    console.log('🛣️ Converted routePoints to LatLng format');
+                }
+                
+                // Check if first point has valid coordinates
+                const firstPointAfterConversion = routePoints[0];
+                if (!firstPointAfterConversion || typeof firstPointAfterConversion.lat !== 'number' || typeof firstPointAfterConversion.lng !== 'number') {
+                    console.error('❌ Invalid coordinates in routePoints:', firstPointAfterConversion);
                     window.updateDebugPanel('MAP_ERROR', 'INVALID_COORDS');
                     this.showNotification('Invalid route coordinates for map display', 'error');
                     return;
@@ -2623,6 +2965,13 @@ class BikeRoutePlanner {
     async getElevationData(routePoints, routeData) {
         console.log('🏔️ Getting elevation data...');
         
+        // Check if using Valhalla routing API - use Valhalla elevation if so
+        const routingApi = document.getElementById('routingApi')?.value || 'valhalla';
+        if (routingApi === 'valhalla') {
+            console.log('🏔️ Using Valhalla elevation API');
+            return await this.getValhallaElevation(routePoints, routeData);
+        }
+        
         try {
             // Sample points along the route every 50 meters
             const samplePoints = [];
@@ -2879,6 +3228,27 @@ class BikeRoutePlanner {
         return loss;
     }
     
+    getGradientColor(grade) {
+        // Function to get color based on gradient percentage
+        // Use red shades for uphill (positive), green shades for downhill (negative)
+        if (grade >= 0) {
+            // Uphill - red shades (light to dark)
+            if (grade <= 3) return '#FFEBEE'; // Very Light Pink - Flat (0-3%)
+            if (grade <= 6) return '#FFCDD2'; // Light Red - Moderate (3-6%)
+            if (grade <= 9) return '#EF9A9A'; // Medium Red - Hard (6-9%)
+            if (grade <= 12) return '#E57373'; // Dark Red - Severe (9-12%)
+            return '#B71C1C'; // Very Dark Red - Extreme (>12%)
+        } else {
+            // Downhill - green shades (light to dark)
+            const absGrade = Math.abs(grade);
+            if (absGrade <= 3) return '#E8F5E9'; // Very Light Green - Flat (0-3%)
+            if (absGrade <= 6) return '#C8E6C9'; // Light Green - Moderate (3-6%)
+            if (absGrade <= 9) return '#81C784'; // Medium Green - Hard (6-9%)
+            if (absGrade <= 12) return '#4CAF50'; // Dark Green - Severe (9-12%)
+            return '#1B5E20'; // Very Dark Green - Extreme (>12%)
+        }
+    }
+    
     createElevationChart(cumulativeDistances, elevations, gain, loss, peak, min) {
         const elevationDiv = document.getElementById('elevationProfile');
         if (!elevationDiv) return;
@@ -2900,12 +3270,20 @@ class BikeRoutePlanner {
                 <canvas id="elevationChart" width="800" height="450"></canvas>
             </div>
             <div class="gradient-legend">
-                <span class="legend-title">Gradient:</span>
-                <span class="legend-item false-flat">False Flat (0-3%)</span>
-                <span class="legend-item moderate">Moderate (4-6%)</span>
-                <span class="legend-item hard">Hard (7-9%)</span>
-                <span class="legend-item severe">Severe (10-15%)</span>
-                <span class="legend-item extreme">Extreme (>15%)</span>
+                <span class="legend-title">Uphill:</span>
+                <span class="legend-item false-flat">Flat (0-3%)</span>
+                <span class="legend-item moderate">Moderate (3-6%)</span>
+                <span class="legend-item hard">Hard (6-9%)</span>
+                <span class="legend-item severe">Severe (9-12%)</span>
+                <span class="legend-item extreme">Extreme (>12%)</span>
+            </div>
+            <div class="gradient-legend">
+                <span class="legend-title">Downhill:</span>
+                <span class="legend-item downhill-flat">Flat (0-3%)</span>
+                <span class="legend-item downhill-moderate">Moderate (3-6%)</span>
+                <span class="legend-item downhill-hard">Hard (6-9%)</span>
+                <span class="legend-item downhill-severe">Severe (9-12%)</span>
+                <span class="legend-item downhill-extreme">Extreme (>12%)</span>
             </div>
             <div class="elevation-stats">
                 <div class="elevation-stat">
@@ -3099,13 +3477,40 @@ class BikeRoutePlanner {
         // Calculate total distance first (needed for elevation drawing)
         const totalDistance = cumulativeDistances[cumulativeDistances.length - 1] || 1000; // fallback to 1km
         
-        // Draw elevation profile - USE SMOOTHED ELEVATIONS FOR REALISTIC LINE
-        ctx.strokeStyle = '#FF0000';
-        ctx.lineWidth = 3;
+        // Draw elevation profile with gradient background shading based on grade
+        // First, fill the area under the curve with gradient colors
+        for (let i = 0; i < smoothedElevations.length - 1; i++) {
+            const elevation = smoothedElevations[i];
+            const nextElevation = smoothedElevations[i + 1];
+            
+            const distance = cumulativeDistances[i] || 0;
+            const nextDistance = cumulativeDistances[i + 1] || distance;
+            
+            const x = padding + (distance / totalDistance) * chartWidth;
+            const y = padding + chartHeight - ((elevation - minElevation) / elevationRange) * chartHeight;
+            const nextX = padding + (nextDistance / totalDistance) * chartWidth;
+            const nextY = padding + chartHeight - ((nextElevation - minElevation) / elevationRange) * chartHeight;
+            
+            // Get gradient for this segment
+            const grade = gradients[i] || 0;
+            ctx.fillStyle = this.getGradientColor(grade);
+            
+            // Draw filled area from x-axis to the curve
+            ctx.beginPath();
+            ctx.moveTo(x, height - padding); // Start at x-axis
+            ctx.lineTo(x, y); // Go up to curve
+            ctx.lineTo(nextX, nextY); // Go to next point on curve
+            ctx.lineTo(nextX, height - padding); // Go down to x-axis
+            ctx.closePath();
+            ctx.fill();
+        }
+        
+        // Draw the elevation line on top (single color)
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 2;
         ctx.beginPath();
         
         smoothedElevations.forEach((elevation, i) => {
-            // Use cumulative distance for x-coordinate (not array index)
             const distance = cumulativeDistances[i] || 0;
             const x = padding + (distance / totalDistance) * chartWidth;
             const y = padding + chartHeight - ((elevation - minElevation) / elevationRange) * chartHeight;
@@ -3116,8 +3521,6 @@ class BikeRoutePlanner {
                 ctx.lineTo(x, y);
             }
         });
-        
-        ctx.stroke();
         
         ctx.stroke();
         
@@ -3290,6 +3693,7 @@ class BikeRoutePlanner {
             totalDistance,
             distanceStep,
             numGridLines,
+            rawElevations: elevations, // Store raw elevations for recalculation on resize
             routePoints: this.currentRoutePoints || [] // Store route points for map marker
         };
         
@@ -3575,10 +3979,23 @@ class BikeRoutePlanner {
                     
                     console.log('?? Redrawing chart with new dimensions:', newWidth, 'x', newHeight);
                     
-                    // Re-draw chart with updated dimensions
+                    // Recalculate smoothed elevations from raw data
+                    const rawElevations = this.chartData.rawElevations || this.chartData.elevations;
+                    const smoothedElevations = this.smoothElevations(rawElevations);
+                    
+                    // Recalculate gradients from smoothed elevations to ensure proper alignment
+                    const recalculatedGradients = this.calculateGradientsForChart(
+                        smoothedElevations,
+                        this.chartData.cumulativeDistances
+                    );
+                    
+                    // Update chartData with new smoothed elevations
+                    this.chartData.elevations = smoothedElevations;
+                    
+                    // Re-draw chart with updated dimensions, smoothed elevations, and recalculated gradients
                     this.drawElevationAndGradientChart(
-                        this.chartData.elevations,
-                        this.chartData.gradients,
+                        smoothedElevations,
+                        recalculatedGradients,
                         this.chartData.cumulativeDistances
                     );
                 }
