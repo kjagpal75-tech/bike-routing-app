@@ -269,10 +269,30 @@ class BikeRoutePlanner {
         try {
             // Get current map bounds for local search
             const bounds = this.map.getBounds();
-            const center = this.map.getCenter();
+            
+            // Use user's current location if available, otherwise use map center
+            let searchCenter = this.map.getCenter();
+            
+            // Try to get user's current location for better results
+            if (navigator.geolocation) {
+                try {
+                    const position = await new Promise((resolve, reject) => {
+                        navigator.geolocation.getCurrentPosition(
+                            resolve,
+                            () => reject(), // Silently fail if geolocation denied
+                            { timeout: 1000, maximumAge: 60000 }
+                        );
+                    });
+                    searchCenter = L.latLng(position.coords.latitude, position.coords.longitude);
+                    console.log(`🔍 Using user's current location for search bias: ${searchCenter.lat.toFixed(4)}, ${searchCenter.lng.toFixed(4)}`);
+                } catch (e) {
+                    // Fall back to map center
+                    console.log(`🔍 Using map center for search bias: ${searchCenter.lat.toFixed(4)}, ${searchCenter.lng.toFixed(4)}`);
+                }
+            }
             
             console.log(`🔍 Searching for address: "${query}"`);
-            console.log(`🔍 Map center: ${center.lat.toFixed(4)}, ${center.lng.toFixed(4)}`);
+            console.log(`🔍 Search center: ${searchCenter.lat.toFixed(4)}, ${searchCenter.lng.toFixed(4)}`);
             console.log(`🔍 Map bounds:`, bounds);
             
             // Extract street number from query if present
@@ -287,11 +307,10 @@ class BikeRoutePlanner {
             let searchUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(queryWithoutNumber)}&limit=10`;
             
             // Add location bias to prioritize local results
-            searchUrl += `&lat=${center.lat}&lon=${center.lng}`;
+            searchUrl += `&lat=${searchCenter.lat}&lon=${searchCenter.lng}`;
             
-            // Add bbox constraint to focus on current map area
-            const bbox = `${bounds.getSouthWest().lng},${bounds.getSouthWest().lat},${bounds.getNorthEast().lng},${bounds.getNorthEast().lat}`;
-            searchUrl += `&bbox=${bbox}`;
+            // Note: Removed bbox constraint to allow searching beyond current map view
+            // The lat/lon bias is sufficient to prioritize local results
             
             console.log(`🔍 Local search URL:`, searchUrl);
             
@@ -319,9 +338,19 @@ class BikeRoutePlanner {
             
             console.log(`🔍 Number of features:`, data.features.length);
             
+            // Sort features by distance from search center (closest first)
+            const sortedFeatures = data.features.map(feature => {
+                const featureLat = feature.geometry.coordinates[1];
+                const featureLon = feature.geometry.coordinates[0];
+                const distance = this.calculateDistance(searchCenter.lat, searchCenter.lng, featureLat, featureLon);
+                return { ...feature, distance };
+            }).sort((a, b) => a.distance - b.distance);
+            
+            console.log(`🔍 Sorted ${sortedFeatures.length} results by distance from user location`);
+            
             // Convert Photon format to our expected format
-            const results = data.features.map((feature, index) => {
-                console.log(`🔍 Feature ${index}:`, feature);
+            const results = sortedFeatures.map((feature, index) => {
+                console.log(`🔍 Feature ${index} (distance: ${feature.distance.toFixed(0)}m):`, feature);
                 console.log(`🔍 Feature ${index} properties:`, feature.properties);
                 console.log(`🔍 Feature ${index} geometry:`, feature.geometry);
                 
@@ -820,7 +849,7 @@ class BikeRoutePlanner {
     encodeSignedNumber(num) {
         // Encode a signed number for polyline encoding
         const sgn = num < 0 ? 1 : 0;
-        const val = (num << 1) ^ sgn;
+        let val = (num << 1) ^ sgn;
         
         let encoded = '';
         while (val >= 0x20) {
@@ -844,16 +873,25 @@ class BikeRoutePlanner {
             throw new Error('Invalid routePoints');
         }
         
-        // Check if routePoints are in correct format (LatLng objects)
+        // Check if routePoints are in correct format (LatLng objects or arrays)
         const firstPoint = routePoints[0];
-        if (!firstPoint || typeof firstPoint.lat !== 'number' || typeof firstPoint.lng !== 'number') {
-            console.error('❌ routePoints not in LatLng format:', firstPoint);
-            throw new Error('routePoints not in LatLng format');
+        const isLatLngFormat = firstPoint && typeof firstPoint.lat === 'number' && typeof firstPoint.lng === 'number';
+        const isArrayFormat = Array.isArray(firstPoint) && firstPoint.length === 2;
+        
+        if (!isLatLngFormat && !isArrayFormat) {
+            console.error('❌ routePoints not in LatLng or array format:', firstPoint);
+            throw new Error('routePoints not in LatLng or array format');
         }
         
         try {
             // Convert route points to format for Valhalla height API
-            const points = routePoints.map(point => [point.lat, point.lng]);
+            const points = routePoints.map(point => {
+                if (isLatLngFormat) {
+                    return [point.lat, point.lng];
+                } else {
+                    return point; // Already in [lat, lng] format
+                }
+            });
             const encodedPolyline = this.encodePolyline(points);
             
             console.log(`🏔️ Encoded polyline length: ${encodedPolyline.length}`);
@@ -957,28 +995,59 @@ class BikeRoutePlanner {
         console.log('🏔️ Getting elevation data from Open-Meteo (fallback)...');
         
         try {
-            // Sample points along the route every 50 meters
+            // Determine format of routePoints
+            const firstPoint = routePoints[0];
+            const isLatLngFormat = firstPoint && typeof firstPoint.lat === 'number' && typeof firstPoint.lng === 'number';
+            const isArrayFormat = Array.isArray(firstPoint) && firstPoint.length === 2;
+            
+            // Calculate total route distance to determine optimal sampling interval
+            let totalDistance = 0;
+            for (let i = 1; i < routePoints.length; i++) {
+                const prevPoint = routePoints[i - 1];
+                const currentPoint = routePoints[i];
+                
+                // Handle both LatLng object and array formats
+                const prevLat = isLatLngFormat ? prevPoint.lat : (isArrayFormat ? prevPoint[0] : prevPoint.lat);
+                const prevLng = isLatLngFormat ? prevPoint.lng : (isArrayFormat ? prevPoint[1] : prevPoint.lng);
+                const currLat = isLatLngFormat ? currentPoint.lat : (isArrayFormat ? currentPoint[0] : currentPoint.lat);
+                const currLng = isLatLngFormat ? currentPoint.lng : (isArrayFormat ? currentPoint[1] : currentPoint.lng);
+                
+                const distance = this.calculateDistance(prevLat, prevLng, currLat, currLng);
+                totalDistance += distance;
+            }
+            
+            // Calculate sampling interval to stay under 200 points (Open Elevation API limit)
+            // Target 180 points to leave some buffer
+            const targetPointCount = 180;
+            const samplingInterval = Math.max(50, Math.ceil(totalDistance / targetPointCount));
+            
+            console.log(`🏔️ Route distance: ${(totalDistance / 1000).toFixed(2)}km, sampling interval: ${samplingInterval}m, expected points: ~${Math.ceil(totalDistance / samplingInterval)}`);
+            
+            // Sample points along the route at calculated interval
             const samplePoints = [];
             let currentDistance = 0;
             
             // Always include the first point
             samplePoints.push(routePoints[0]);
             
-            // Sample every 50 meters along the route
+            // Sample at calculated interval
             for (let i = 1; i < routePoints.length; i++) {
                 const prevPoint = routePoints[i - 1];
                 const currentPoint = routePoints[i];
                 
+                // Handle both LatLng object and array formats
+                const prevLat = isLatLngFormat ? prevPoint.lat : (isArrayFormat ? prevPoint[0] : prevPoint.lat);
+                const prevLng = isLatLngFormat ? prevPoint.lng : (isArrayFormat ? prevPoint[1] : prevPoint.lng);
+                const currLat = isLatLngFormat ? currentPoint.lat : (isArrayFormat ? currentPoint[0] : currentPoint.lat);
+                const currLng = isLatLngFormat ? currentPoint.lng : (isArrayFormat ? currentPoint[1] : currentPoint.lng);
+                
                 // Calculate distance from previous point
-                const distance = this.calculateDistance(
-                    prevPoint.lat, prevPoint.lng,
-                    currentPoint.lat, currentPoint.lng
-                );
+                const distance = this.calculateDistance(prevLat, prevLng, currLat, currLng);
                 
                 currentDistance += distance;
                 
-                // If we've traveled at least 50 meters, add this point
-                if (currentDistance >= 50) {
+                // If we've traveled at least the sampling interval, add this point
+                if (currentDistance >= samplingInterval) {
                     samplePoints.push(currentPoint);
                     currentDistance = 0; // Reset distance counter
                 }
@@ -989,10 +1058,14 @@ class BikeRoutePlanner {
                 samplePoints.push(routePoints[routePoints.length - 1]);
             }
             
-            console.log(`🏔️ 50m sampling: ${samplePoints.length} points from ${routePoints.length} total route points`);
+            console.log(`🏔️ Dynamic sampling: ${samplePoints.length} points from ${routePoints.length} total route points (interval: ${samplingInterval}m)`);
             
             // Get elevation data from Open Elevation API
-            const locations = samplePoints.map(point => `${point.lat},${point.lng}`).join('|');
+            const locations = samplePoints.map(point => {
+                const lat = isLatLngFormat ? point.lat : (isArrayFormat ? point[0] : point.lat);
+                const lng = isLatLngFormat ? point.lng : (isArrayFormat ? point[1] : point.lng);
+                return `${lat},${lng}`;
+            }).join('|');
             
             // Check if running on localhost vs production
             const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
@@ -1526,12 +1599,12 @@ class BikeRoutePlanner {
     }
     
     setupWaypointAddressSearch(input, waypointId) {
-        // Add search functionality
+        // Add search functionality with autocomplete like start/end points
         let searchTimeout;
         input.addEventListener('input', (e) => {
             clearTimeout(searchTimeout);
             searchTimeout = setTimeout(() => {
-                this.searchWaypointAddress(e.target.value, waypointId);
+                this.searchWaypointAddressSuggestions(e.target.value, waypointId);
             }, 500);
         });
         
@@ -1542,11 +1615,176 @@ class BikeRoutePlanner {
                 this.resolveWaypointAddress(e.target.value, waypointId);
             }
         });
+    }
+    
+    async searchWaypointAddressSuggestions(query, waypointId) {
+        if (query.length < 3) {
+            this.hideWaypointSuggestions(waypointId);
+            return;
+        }
         
-        // Add blur event to hide suggestions when clicking away
-        input.addEventListener('blur', () => {
-            setTimeout(() => this.hideWaypointSuggestions(waypointId), 200);
+        try {
+            // Get current map bounds for local search
+            const bounds = this.map.getBounds();
+            
+            // Use user's current location if available, otherwise use map center
+            let searchCenter = this.map.getCenter();
+            
+            // Try to get user's current location for better results
+            if (navigator.geolocation) {
+                try {
+                    const position = await new Promise((resolve, reject) => {
+                        navigator.geolocation.getCurrentPosition(
+                            resolve,
+                            () => reject(), // Silently fail if geolocation denied
+                            { timeout: 1000, maximumAge: 60000 }
+                        );
+                    });
+                    searchCenter = L.latLng(position.coords.latitude, position.coords.longitude);
+                    console.log(`🔍 Using user's current location for search bias: ${searchCenter.lat.toFixed(4)}, ${searchCenter.lng.toFixed(4)}`);
+                } catch (e) {
+                    // Fall back to map center
+                    console.log(`🔍 Using map center for search bias: ${searchCenter.lat.toFixed(4)}, ${searchCenter.lng.toFixed(4)}`);
+                }
+            }
+            
+            console.log(`🔍 Searching waypoint for: "${query}"`);
+            
+            // Use Photon API with location bias for local results (same as start/end)
+            let searchUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=10`;
+            
+            // Add location bias to prioritize local results
+            searchUrl += `&lat=${searchCenter.lat}&lon=${searchCenter.lng}`;
+            
+            // Note: Removed bbox constraint to allow searching beyond current map view
+            // The lat/lon bias is sufficient to prioritize local results
+            
+            console.log(`🔍 Waypoint search URL: ${searchUrl}`);
+            
+            const response = await fetch(searchUrl, {
+                headers: {
+                    'Accept': 'application/json'
+                }
+            });
+            
+            console.log(`🔍 Waypoint search response status: ${response.status}`);
+            
+            if (!response.ok) {
+                throw new Error(`Photon API error: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            console.log(`🔍 Waypoint search response data:`, data);
+            
+            if (data && data.features && data.features.length > 0) {
+                // Sort features by distance from search center (closest first)
+                const sortedFeatures = data.features.map(feature => {
+                    const featureLat = feature.geometry.coordinates[1];
+                    const featureLon = feature.geometry.coordinates[0];
+                    const distance = this.calculateDistance(searchCenter.lat, searchCenter.lng, featureLat, featureLon);
+                    return { ...feature, distance };
+                }).sort((a, b) => a.distance - b.distance);
+                
+                console.log(`🔍 Sorted ${sortedFeatures.length} waypoint results by distance from user location`);
+                this.displayWaypointSuggestions(sortedFeatures, waypointId);
+            } else {
+                console.log(`🔍 No features found in waypoint search response`);
+                this.hideWaypointSuggestions(waypointId);
+            }
+        } catch (error) {
+            console.error('Waypoint search error:', error);
+            this.hideWaypointSuggestions(waypointId);
+        }
+    }
+    
+    displayWaypointSuggestions(features, waypointId) {
+        // Remove existing suggestions for this waypoint
+        this.hideWaypointSuggestions(waypointId);
+        
+        if (features.length === 0) return;
+        
+        // Create suggestions dropdown
+        const suggestionsDiv = document.createElement('div');
+        suggestionsDiv.className = 'address-suggestions';
+        suggestionsDiv.id = `waypointSuggestions${waypointId}`;
+        
+        features.forEach(feature => {
+            const suggestionDiv = document.createElement('div');
+            suggestionDiv.className = 'suggestion-item';
+            
+            // Format display name
+            let displayName = feature.properties.name || '';
+            if (feature.properties.street) {
+                displayName += `, ${feature.properties.street}`;
+            }
+            if (feature.properties.city) {
+                displayName += `, ${feature.properties.city}`;
+            }
+            if (displayName.length > 60) {
+                displayName = displayName.substring(0, 60) + '...';
+            }
+            
+            suggestionDiv.textContent = displayName || feature.properties.name || 'Unknown location';
+            suggestionDiv.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                this.selectWaypointSuggestion(feature, waypointId);
+            });
+            suggestionDiv.addEventListener('click', () => {
+                this.selectWaypointSuggestion(feature, waypointId);
+            });
+            
+            suggestionsDiv.appendChild(suggestionDiv);
         });
+        
+        // Position suggestions below the input
+        const input = document.getElementById(`waypointInput${waypointId}`);
+        if (input) {
+            input.parentNode.style.position = 'relative';
+            suggestionsDiv.style.top = input.offsetHeight + 'px';
+            suggestionsDiv.style.left = '0';
+            input.parentNode.appendChild(suggestionsDiv);
+        }
+    }
+    
+    hideWaypointSuggestions(waypointId) {
+        const suggestionsDiv = document.getElementById(`waypointSuggestions${waypointId}`);
+        if (suggestionsDiv) {
+            suggestionsDiv.remove();
+        }
+    }
+    
+    selectWaypointSuggestion(feature, waypointId) {
+        const lat = feature.geometry.coordinates[1];
+        const lon = feature.geometry.coordinates[0];
+        
+        // Update waypoint location
+        const waypoint = this.waypoints.find(w => w.id === waypointId);
+        if (waypoint) {
+            const latlng = L.latLng(lat, lon);
+            waypoint.latlng = latlng;
+            waypoint.marker.setLatLng(latlng);
+            
+            // Update input with selected address
+            const input = document.getElementById(`waypointInput${waypointId}`);
+            if (input) {
+                let displayName = feature.properties.name || '';
+                if (feature.properties.street) {
+                    displayName += `, ${feature.properties.street}`;
+                }
+                if (feature.properties.city) {
+                    displayName += `, ${feature.properties.city}`;
+                }
+                input.value = displayName;
+            }
+            
+            // Auto-regenerate route if we have start and end points
+            if (this.startMarker && this.endMarker && this.routeLayer) {
+                console.log('🔄 Auto-regenerating route after waypoint selection');
+                setTimeout(() => this.generateRoute(), 500);
+            }
+        }
+        
+        this.hideWaypointSuggestions(waypointId);
     }
     
     async searchWaypointAddress(query, waypointId) {
@@ -1940,16 +2178,42 @@ class BikeRoutePlanner {
                 };
             }
             
-            // For other addresses, try a simple geocoding approach
-            // Note: This may not work due to CORS, but we'll try
+            // For other addresses, try geocoding via proxy
             try {
-                const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`, {
-                    mode: 'no-cors' // This will allow the request but we won't get the response
+                const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+                let geocodeUrl;
+                if (isLocalhost) {
+                    // Use direct API call for localhost development
+                    geocodeUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=5`;
+                } else {
+                    // Use Cloudflare function proxy for production
+                    geocodeUrl = `/api/elevation-proxy?service=geocode&q=${encodeURIComponent(address)}`;
+                }
+                
+                const response = await fetch(geocodeUrl, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                    },
                 });
                 
-                // Since we can't read the response due to CORS, we'll return null
-                // and let the user know they need to use manual methods
-                console.log('❌ CORS blocked - using manual fallback');
+                if (!response.ok) {
+                    console.log(`❌ Geocoding API returned ${response.status}`);
+                    return null;
+                }
+                
+                const results = await response.json();
+                console.log(`🔍 Geocoding results: ${results.length} found`);
+                
+                if (results && results.length > 0) {
+                    const result = results[0];
+                    return {
+                        display_name: result.display_name,
+                        lat: result.lat,
+                        lon: result.lon
+                    };
+                }
+                
                 return null;
                 
             } catch (corsError) {
@@ -2877,14 +3141,17 @@ class BikeRoutePlanner {
             // Manual bounds calculation
             const firstPoint = routePoints[0];
             const lastPoint = routePoints[routePoints.length - 1];
-            const manualBounds = {
-                getCenter: () => L.latLng(
-                    (firstPoint.lat + lastPoint.lat) / 2,
-                    (firstPoint.lng + lastPoint.lng) / 2
-                ),
-                getNorthEast: () => L.latLng(lastPoint.lat, lastPoint.lng),
-                getSouthWest: () => L.latLng(firstPoint.lat, firstPoint.lng)
-            };
+            
+            // Handle both LatLng object and array formats
+            const firstLat = Array.isArray(firstPoint) ? firstPoint[0] : firstPoint.lat;
+            const firstLng = Array.isArray(firstPoint) ? firstPoint[1] : firstPoint.lng;
+            const lastLat = Array.isArray(lastPoint) ? lastPoint[0] : lastPoint.lat;
+            const lastLng = Array.isArray(lastPoint) ? lastPoint[1] : lastPoint.lng;
+            
+            const manualBounds = L.latLngBounds(
+                [firstLat, firstLng],
+                [lastLat, lastLng]
+            );
             console.log('🗺️ Manual bounds center:', manualBounds.getCenter());
             
             try {
@@ -2973,28 +3240,50 @@ class BikeRoutePlanner {
         }
         
         try {
-            // Sample points along the route every 50 meters
+            // Calculate total route distance to determine optimal sampling interval
+            let totalDistance = 0;
+            for (let i = 1; i < routePoints.length; i++) {
+                const prevPoint = routePoints[i - 1];
+                const currentPoint = routePoints[i];
+                const distance = this.calculateDistance(
+                    prevPoint.lat, prevPoint.lng,
+                    currentPoint.lat, currentPoint.lng
+                );
+                totalDistance += distance;
+            }
+            
+            // Calculate sampling interval to stay under 200 points (Open Elevation API limit)
+            // Target 180 points to leave some buffer
+            const targetPointCount = 180;
+            const samplingInterval = Math.max(50, Math.ceil(totalDistance / targetPointCount));
+            
+            console.log(`🏔️ Route distance: ${(totalDistance / 1000).toFixed(2)}km, sampling interval: ${samplingInterval}m, expected points: ~${Math.ceil(totalDistance / samplingInterval)}`);
+            
+            // Sample points along the route at calculated interval
             const samplePoints = [];
             let currentDistance = 0;
             
             // Always include the first point
             samplePoints.push(routePoints[0]);
             
-            // Sample every 50 meters along the route
+            // Sample at calculated interval
             for (let i = 1; i < routePoints.length; i++) {
                 const prevPoint = routePoints[i - 1];
                 const currentPoint = routePoints[i];
                 
+                // Handle both LatLng object and array formats
+                const prevLat = isLatLngFormat ? prevPoint.lat : (isArrayFormat ? prevPoint[0] : prevPoint.lat);
+                const prevLng = isLatLngFormat ? prevPoint.lng : (isArrayFormat ? prevPoint[1] : prevPoint.lng);
+                const currLat = isLatLngFormat ? currentPoint.lat : (isArrayFormat ? currentPoint[0] : currentPoint.lat);
+                const currLng = isLatLngFormat ? currentPoint.lng : (isArrayFormat ? currentPoint[1] : currentPoint.lng);
+                
                 // Calculate distance from previous point
-                const distance = this.calculateDistance(
-                    prevPoint.lat, prevPoint.lng,
-                    currentPoint.lat, currentPoint.lng
-                );
+                const distance = this.calculateDistance(prevLat, prevLng, currLat, currLng);
                 
                 currentDistance += distance;
                 
-                // If we've traveled at least 50 meters, add this point
-                if (currentDistance >= 50) {
+                // If we've traveled at least the sampling interval, add this point
+                if (currentDistance >= samplingInterval) {
                     samplePoints.push(currentPoint);
                     currentDistance = 0; // Reset distance counter
                 }
@@ -3005,10 +3294,14 @@ class BikeRoutePlanner {
                 samplePoints.push(routePoints[routePoints.length - 1]);
             }
             
-            console.log(`🏔️ 50m sampling: ${samplePoints.length} points from ${routePoints.length} total route points`);
+            console.log(`🏔️ Dynamic sampling: ${samplePoints.length} points from ${routePoints.length} total route points (interval: ${samplingInterval}m)`);
             
             // Get elevation data from Open Elevation API
-            const locations = samplePoints.map(point => `${point.lat},${point.lng}`).join('|');
+            const locations = samplePoints.map(point => {
+                const lat = isLatLngFormat ? point.lat : (isArrayFormat ? point[0] : point.lat);
+                const lng = isLatLngFormat ? point.lng : (isArrayFormat ? point[1] : point.lng);
+                return `${lat},${lng}`;
+            }).join('|');
             
             // Check if running on localhost vs production
             const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
@@ -3158,8 +3451,14 @@ class BikeRoutePlanner {
         const cumulativeDistances = [];
         let totalDistance = 0;
         
+        // Determine format of samplePoints
+        const firstSamplePoint = samplePoints[0];
+        const isLatLngFormat = firstSamplePoint && typeof firstSamplePoint.lat === 'number' && typeof firstSamplePoint.lng === 'number';
+        const isArrayFormat = Array.isArray(firstSamplePoint) && firstSamplePoint.length === 2;
+        
         console.log(`🏔️ CUMULATIVE DISTANCE CALCULATION DEBUG:`);
         console.log(`  - Starting calculation with ${samplePoints.length} elevation sample points`);
+        console.log(`  - Sample points format: ${isLatLngFormat ? 'LatLng objects' : (isArrayFormat ? 'Array format [lat, lng]' : 'Unknown')}`);
         
         // Calculate distances between consecutive sample points
         cumulativeDistances.push(0); // First point at 0m
@@ -3168,10 +3467,13 @@ class BikeRoutePlanner {
             const prevPoint = samplePoints[i - 1];
             const currentPoint = samplePoints[i];
             
-            const distance = this.calculateDistance(
-                prevPoint.lat, prevPoint.lng,
-                currentPoint.lat, currentPoint.lng
-            );
+            // Handle both LatLng object and array formats
+            const prevLat = isLatLngFormat ? prevPoint.lat : (isArrayFormat ? prevPoint[0] : prevPoint.lat);
+            const prevLng = isLatLngFormat ? prevPoint.lng : (isArrayFormat ? prevPoint[1] : prevPoint.lng);
+            const currLat = isLatLngFormat ? currentPoint.lat : (isArrayFormat ? currentPoint[0] : currentPoint.lat);
+            const currLng = isLatLngFormat ? currentPoint.lng : (isArrayFormat ? currentPoint[1] : currentPoint.lng);
+            
+            const distance = this.calculateDistance(prevLat, prevLng, currLat, currLng);
             
             totalDistance += distance;
             cumulativeDistances.push(totalDistance);
